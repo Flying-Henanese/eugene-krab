@@ -2,6 +2,7 @@
 
 - Repo: https://github.com/virattt/dexter
 - Dexter is a CLI-based AI agent for deep financial research, built with TypeScript, Ink (React for CLI), and LangChain.
+- Before implementing Feishu support, read `docs/superpowers/specs/2026-07-01-feishu-wsclient-design.md`. It captures the agreed scope: Feishu WSClient long connection, one-on-one text chats only, credentials in `.env`, no project-local allowlist for the first version.
 
 ## Project Structure
 
