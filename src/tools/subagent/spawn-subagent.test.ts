@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { resolveSubagentModel } from './spawn-subagent.js';
+import { resolveSubagentModel, resolveSubagentReasoningEffort } from './spawn-subagent.js';
 
 const originalSubagentModel = process.env.SUBAGENT_MODEL;
 const originalAnalysisModel = process.env.SUBAGENT_ANALYSIS_MODEL;
+const originalReasoningEffort = process.env.DEEPSEEK_REASONING_EFFORT;
+const originalSubagentReasoningEffort = process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
 
 afterEach(() => {
   if (originalSubagentModel === undefined) delete process.env.SUBAGENT_MODEL;
@@ -10,6 +12,12 @@ afterEach(() => {
 
   if (originalAnalysisModel === undefined) delete process.env.SUBAGENT_ANALYSIS_MODEL;
   else process.env.SUBAGENT_ANALYSIS_MODEL = originalAnalysisModel;
+
+  if (originalReasoningEffort === undefined) delete process.env.DEEPSEEK_REASONING_EFFORT;
+  else process.env.DEEPSEEK_REASONING_EFFORT = originalReasoningEffort;
+
+  if (originalSubagentReasoningEffort === undefined) delete process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
+  else process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT = originalSubagentReasoningEffort;
 });
 
 describe('resolveSubagentModel', () => {
@@ -41,5 +49,21 @@ describe('resolveSubagentModel', () => {
     delete process.env.SUBAGENT_ANALYSIS_MODEL;
 
     expect(resolveSubagentModel('ollama:llama3.1', 'research')).toBe('ollama:llama3.1');
+  });
+});
+
+describe('resolveSubagentReasoningEffort', () => {
+  test('uses subagent-specific reasoning effort before main effort', () => {
+    process.env.DEEPSEEK_REASONING_EFFORT = 'high';
+    process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT = 'low';
+
+    expect(resolveSubagentReasoningEffort()).toBe('low');
+  });
+
+  test('falls back to main reasoning effort when subagent effort is unset', () => {
+    process.env.DEEPSEEK_REASONING_EFFORT = 'medium';
+    delete process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
+
+    expect(resolveSubagentReasoningEffort()).toBe('medium');
   });
 });

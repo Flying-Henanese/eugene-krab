@@ -47,6 +47,7 @@ export class Agent {
   private readonly signal?: AbortSignal;
   private readonly memoryEnabled: boolean;
   private readonly messageQueue?: MessageQueue;
+  private readonly reasoningEffort?: AgentConfig['reasoningEffort'];
   private compactionFailures: number = 0;
 
   private constructor(
@@ -72,6 +73,7 @@ export class Agent {
     this.signal = config.signal;
     this.memoryEnabled = config.memoryEnabled ?? true;
     this.messageQueue = config.messageQueue;
+    this.reasoningEffort = config.reasoningEffort;
   }
 
   static async create(config: AgentConfig = {}): Promise<Agent> {
@@ -325,6 +327,7 @@ export class Agent {
       model: this.model,
       tools: this.tools,
       signal: this.signal,
+      reasoningEffort: this.reasoningEffort,
     })) {
       accumulated = accumulated ? accumulated.concat(chunk) : chunk;
       const { charDelta, mode } = inspectChunkContent(chunk);
@@ -370,6 +373,7 @@ export class Agent {
       model: this.model,
       tools: this.tools,
       signal: this.signal,
+      reasoningEffort: this.reasoningEffort,
     });
     return { response: result.response as AIMessage, usage: result.usage };
   }

@@ -26,6 +26,24 @@ export function getFastModel(modelProvider: string, fallbackModel: string): stri
   return getProviderById(modelProvider)?.fastModel ?? fallbackModel;
 }
 
+export type DeepSeekReasoningEffort = 'low' | 'medium' | 'high';
+
+function normalizeDeepSeekReasoningEffort(
+  value: string | undefined,
+  fallback: DeepSeekReasoningEffort = 'high',
+): DeepSeekReasoningEffort {
+  return value === 'low' || value === 'medium' || value === 'high' ? value : fallback;
+}
+
+export function resolveDeepSeekReasoningEffort(
+  explicit?: string,
+): DeepSeekReasoningEffort {
+  return normalizeDeepSeekReasoningEffort(
+    explicit ?? process.env.DEEPSEEK_REASONING_EFFORT,
+    'high',
+  );
+}
+
 // Generic retry helper with exponential backoff
 async function withRetry<T>(fn: () => Promise<T>, provider: string, maxAttempts = 3): Promise<T> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -52,6 +70,7 @@ async function withRetry<T>(fn: () => Promise<T>, provider: string, maxAttempts 
 // Model provider configuration
 interface ModelOpts {
   streaming: boolean;
+  reasoningEffort?: DeepSeekReasoningEffort;
 }
 
 type ModelFactory = (name: string, opts: ModelOpts) => BaseChatModel;
@@ -109,9 +128,10 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
     // Both deepseek-v4-pro and deepseek-v4-flash support thinking mode.
     // temperature/top_p/presence_penalty/frequency_penalty are ignored in thinking mode.
     const isThinkingModel = name === 'deepseek-v4-pro' || name === 'deepseek-v4-flash';
+    const { reasoningEffort, ...chatOpts } = opts;
     return new ChatOpenAI({
       model: name,
-      ...opts,
+      ...chatOpts,
       apiKey: getApiKey('DEEPSEEK_API_KEY'),
       configuration: {
         baseURL: 'https://api.deepseek.com',
@@ -119,7 +139,7 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
       ...(isThinkingModel && {
         // reasoning_effort is a top-level param; thinking toggle goes in extra_body
         // per DeepSeek V4 API docs (OpenAI SDK compat layer)
-        reasoning_effort: 'high',
+        reasoning_effort: resolveDeepSeekReasoningEffort(reasoningEffort),
         extraBody: {
           thinking: { type: 'enabled' },
         },
@@ -152,10 +172,13 @@ const DEFAULT_FACTORY: ModelFactory = (name, opts) =>
 
 export function getChatModel(
   modelName: string = DEFAULT_MODEL,
-  streaming: boolean = false
+  streaming: boolean = false,
+  options: { reasoningEffort?: DeepSeekReasoningEffort } = {},
 ): BaseChatModel {
-  const opts: ModelOpts = { streaming };
   const provider = resolveProvider(modelName);
+  const opts: ModelOpts = provider.id === 'deepseek' && options.reasoningEffort
+    ? { streaming, reasoningEffort: options.reasoningEffort }
+    : { streaming };
   const factory = MODEL_FACTORIES[provider.id] ?? DEFAULT_FACTORY;
   return factory(modelName, opts);
 }
@@ -166,6 +189,7 @@ interface CallLlmOptions {
   outputSchema?: z.ZodType<unknown>;
   tools?: StructuredToolInterface[];
   signal?: AbortSignal;
+  reasoningEffort?: DeepSeekReasoningEffort;
 }
 
 export interface LlmResult {
@@ -222,10 +246,10 @@ function buildAnthropicMessages(systemPrompt: string, userPrompt: string) {
 }
 
 export async function callLlm(prompt: string, options: CallLlmOptions = {}): Promise<LlmResult> {
-  const { model = DEFAULT_MODEL, systemPrompt, outputSchema, tools, signal } = options;
+  const { model = DEFAULT_MODEL, systemPrompt, outputSchema, tools, signal, reasoningEffort } = options;
   const finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-  const llm = getChatModel(model, false);
+  const llm = getChatModel(model, false, { reasoningEffort });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runnable: Runnable<any, any> = llm;
@@ -298,6 +322,7 @@ interface CallLlmWithMessagesOptions {
   model?: string;
   tools?: StructuredToolInterface[];
   signal?: AbortSignal;
+  reasoningEffort?: DeepSeekReasoningEffort;
 }
 
 /**
@@ -315,9 +340,9 @@ export async function callLlmWithMessages(
   messages: BaseMessage[],
   options: CallLlmWithMessagesOptions = {},
 ): Promise<LlmResult> {
-  const { model = DEFAULT_MODEL, tools, signal } = options;
+  const { model = DEFAULT_MODEL, tools, signal, reasoningEffort } = options;
 
-  const llm = getChatModel(model, false);
+  const llm = getChatModel(model, false, { reasoningEffort });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runnable: Runnable<any, any> = llm;
@@ -358,9 +383,9 @@ export async function* streamLlmWithMessages(
   messages: BaseMessage[],
   options: CallLlmWithMessagesOptions = {},
 ): AsyncGenerator<AIMessageChunk, void> {
-  const { model = DEFAULT_MODEL, tools, signal } = options;
+  const { model = DEFAULT_MODEL, tools, signal, reasoningEffort } = options;
 
-  const llm = getChatModel(model, true);
+  const llm = getChatModel(model, true, { reasoningEffort });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runnable: Runnable<any, any> = llm;

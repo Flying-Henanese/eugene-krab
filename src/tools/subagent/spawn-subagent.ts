@@ -2,7 +2,11 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { z } from 'zod';
 import type { TokenUsage } from '../../agent/types.js';
-import { getFastModel } from '../../model/llm.js';
+import {
+  getFastModel,
+  resolveDeepSeekReasoningEffort,
+  type DeepSeekReasoningEffort,
+} from '../../model/llm.js';
 import { resolveProvider } from '../../providers.js';
 import {
   SUBAGENT_TYPES,
@@ -85,6 +89,10 @@ export function resolveSubagentModel(parentModel: string, typeKey: string): stri
   return getFastModel(resolveProvider(parentModel).id, parentModel);
 }
 
+export function resolveSubagentReasoningEffort(): DeepSeekReasoningEffort {
+  return resolveDeepSeekReasoningEffort(process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT);
+}
+
 /**
  * Build the spawn_subagent tool, bound to the given model. Mirrors the other
  * model-bound tool factories in the registry.
@@ -102,6 +110,7 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
       const typeCfg = SUBAGENT_TYPES[typeKey] ?? SUBAGENT_TYPES[DEFAULT_SUBAGENT_TYPE];
       const toolAllowlist = resolveSubagentTools(typeKey);
       const subagentModel = resolveSubagentModel(model, typeKey);
+      const reasoningEffort = resolveSubagentReasoningEffort();
 
       // Lazy import to break the registry → spawn-subagent → agent → registry cycle.
       // By first invocation all modules are fully loaded.
@@ -115,6 +124,7 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
         toolAllowlist,
         systemPromptOverride: typeCfg.systemPrompt,
         agentLabel: typeKey,
+        reasoningEffort,
         // Read-only subagents: no approval plumbing needed in v1.
       });
 
