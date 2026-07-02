@@ -1,0 +1,23 @@
+services:
+  dexter-gateway:
+    build:
+      context: .
+    image: dexter-gateway:local
+    container_name: dexter-gateway
+    restart: unless-stopped
+    init: true
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      PLAYWRIGHT_DOWNLOAD_HOST: https://npmmirror.com/mirrors/playwright
+    volumes:
+      - .:/app
+      - dexter_node_modules:/app/node_modules
+      - ./.dexter:/app/.dexter
+    command: >
+      sh -lc "bun install --frozen-lockfile --registry https://registry.npmmirror.com
+      && xvfb-run -a bun run gateway"
+
+volumes:
+  dexter_node_modules:

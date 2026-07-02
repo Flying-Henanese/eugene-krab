@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+.dexter
+node_modules
+logs
+coverage.json
+npm-debug.log*
+yarn-debug.log*
+.DS_Store
+.vscode
+.idea
