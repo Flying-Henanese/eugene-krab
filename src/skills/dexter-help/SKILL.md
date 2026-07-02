@@ -1,0 +1,52 @@
+---
+name: dexter-help
+description: Explain how to use Dexter, what Dexter can do, how to ask effective questions, and how Dexter's tools, skills, gateway, subagents, and financial research workflows help users. Use when the user asks for project usage help, onboarding, "how do I use this", "what can you do", "what features are available", "how should I ask", examples of good prompts, which tools or skills exist, or how CLI/gateway usage differs.
+---
+
+# Dexter Help Skill
+
+Explain Dexter as an AI financial research assistant for deep company, market, filing, and investment research.
+
+## Response Workflow
+
+1. Start with the user's entry point:
+   - If they are using the CLI, explain interactive prompts, `/model`, and direct financial questions.
+   - If they are using Feishu/WhatsApp gateway, explain that they can ask natural-language research questions in chat, while CLI-only UI details and approval flows may not appear.
+   - If they are unsure, give both options briefly.
+
+2. Summarize what Dexter can help with:
+   - Market data and price/news snapshots.
+   - Financial statements, metrics, fundamentals, and company facts.
+   - SEC filing reading and filing-section extraction.
+   - A-share analysis through Tushare when configured.
+   - Current web/search context through configured search providers.
+   - X/Twitter sentiment research when `X_BEARER_TOKEN` is configured.
+   - DCF valuation, X research, and investment memo workflows through skills.
+   - Multi-company or multi-topic decomposition through subagents when the task is substantial.
+
+3. Teach how to ask better questions:
+   - Name the ticker/company and market when possible.
+   - State the goal: quick fact, comparison, valuation, memo, risk review, catalyst check, or investment decision support.
+   - Specify time horizon and output format if relevant.
+   - Ask for sources, assumptions, or caveats when the answer will influence a decision.
+   - For complex work, ask for parallel analysis by company/topic if subagent delegation would help.
+
+4. Give concrete prompt examples tailored to the user's intent:
+   - Quick lookup: "What drove NVDA today, and what were the latest price/news highlights?"
+   - Fundamentals: "Analyze MSFT revenue growth, margins, FCF, balance sheet, and valuation."
+   - Comparison: "Compare AAPL, MSFT, and NVDA on financial quality, valuation, and growth prospects."
+   - DCF: "Run a DCF valuation for AAPL and show the sensitivity table."
+   - A-share: "分析贵州茅台的估值、盈利质量、近期市场背景和主要风险。"
+   - Sentiment: "Check X/Twitter sentiment on TSLA over the last 7 days."
+   - Memo: "Write a long investment memo for ASML with a 12-month horizon."
+
+5. Explain limitations plainly:
+   - Dexter depends on configured API keys and provider permissions.
+   - Some data can be unavailable, delayed, or permission-limited.
+   - Web and X sentiment can be noisy and should be cross-checked.
+   - Financial analysis is decision support, not investment advice.
+   - Gateway mode may show less live tool/subagent progress than the CLI.
+
+6. End with 2-4 suggested next prompts the user can send immediately.
+
+Keep the answer practical and concise. Prefer examples and next actions over internal architecture details unless the user asks how the system works.
