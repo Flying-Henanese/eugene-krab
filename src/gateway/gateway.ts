@@ -13,7 +13,12 @@ import {
 } from './channels/whatsapp/index.js';
 import { resolveRoute } from './routing/resolve-route.js';
 import { resolveSessionStorePath, upsertSessionMeta } from './sessions/store.js';
-import { loadGatewayConfig, resolveFeishuAccount, type GatewayConfig } from './config.js';
+import {
+  loadGatewayConfig,
+  resolveFeishuAccount,
+  resolveGatewayAgentModel,
+  type GatewayConfig,
+} from './config.js';
 import { runAgentForMessage, isSessionRunning, enqueueForSession } from './agent-runner.js';
 import { cleanMarkdownForWhatsApp } from './utils.js';
 import { startCronRunner } from '../cron/runner.js';
@@ -29,7 +34,6 @@ import {
 import type { GroupContext } from '../agent/prompts.js';
 import { appendFileSync } from 'node:fs';
 import { dexterPath } from '../utils/paths.js';
-import { getSetting } from '../utils/config.js';
 
 const LOG_PATH = dexterPath('gateway-debug.log');
 function debugLog(msg: string) {
@@ -162,8 +166,7 @@ async function handleInbound(cfg: GatewayConfig, inbound: WhatsAppInboundMessage
     }
 
     console.log(`Processing message with agent...`);
-    const model = getSetting('modelId', 'gpt-5.5') as string;
-    const modelProvider = getSetting('provider', 'openai') as string;
+    const { model, modelProvider } = resolveGatewayAgentModel(cfg);
 
     // If agent is already running for this session, enqueue for mid-run injection
     if (isSessionRunning(route.sessionKey)) {
@@ -240,8 +243,7 @@ async function handleFeishuInbound(cfg: GatewayConfig, inbound: FeishuInboundMes
   });
 
   try {
-    const model = getSetting('modelId', 'gpt-5.5') as string;
-    const modelProvider = getSetting('provider', 'openai') as string;
+    const { model, modelProvider } = resolveGatewayAgentModel(cfg);
 
     if (isSessionRunning(route.sessionKey)) {
       debugLog(`[gateway] agent busy for feishu session=${route.sessionKey}, enqueueing`);

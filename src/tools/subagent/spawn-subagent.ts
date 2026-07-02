@@ -2,6 +2,8 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import type { RunnableConfig } from '@langchain/core/runnables';
 import { z } from 'zod';
 import type { TokenUsage } from '../../agent/types.js';
+import { getFastModel } from '../../model/llm.js';
+import { resolveProvider } from '../../providers.js';
 import {
   SUBAGENT_TYPES,
   SUBAGENT_TYPE_NAMES,
@@ -71,6 +73,18 @@ const SpawnSubagentInputSchema = z.object({
     .describe('Optional background the subagent needs but cannot see from the conversation.'),
 });
 
+export function resolveSubagentModel(parentModel: string, typeKey: string): string {
+  if (typeKey === 'analysis' && process.env.SUBAGENT_ANALYSIS_MODEL) {
+    return process.env.SUBAGENT_ANALYSIS_MODEL;
+  }
+
+  if (process.env.SUBAGENT_MODEL) {
+    return process.env.SUBAGENT_MODEL;
+  }
+
+  return getFastModel(resolveProvider(parentModel).id, parentModel);
+}
+
 /**
  * Build the spawn_subagent tool, bound to the given model. Mirrors the other
  * model-bound tool factories in the registry.
@@ -87,13 +101,14 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
       const typeKey = input.subagent_type ?? DEFAULT_SUBAGENT_TYPE;
       const typeCfg = SUBAGENT_TYPES[typeKey] ?? SUBAGENT_TYPES[DEFAULT_SUBAGENT_TYPE];
       const toolAllowlist = resolveSubagentTools(typeKey);
+      const subagentModel = resolveSubagentModel(model, typeKey);
 
       // Lazy import to break the registry → spawn-subagent → agent → registry cycle.
       // By first invocation all modules are fully loaded.
       const { Agent } = await import('../../agent/agent.js');
 
       const subagent = await Agent.create({
-        model,
+        model: subagentModel,
         maxIterations: typeCfg.maxIterations,
         signal,
         memoryEnabled: false,
@@ -163,7 +178,7 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
         return `Subagent (${typeKey}) finished without producing an answer.`;
       }
       return usage
-        ? `${answer}\n\n_[subagent ${typeKey}: ${usage.totalTokens} tokens]_`
+        ? `${answer}\n\n_[subagent ${typeKey}, ${subagentModel}: ${usage.totalTokens} tokens]_`
         : answer;
     },
   });

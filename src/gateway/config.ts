@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { normalizeE164 } from './utils.js';
 import { dexterPath } from '../utils/paths.js';
+import { getSetting } from '../utils/config.js';
 
 const DEFAULT_GATEWAY_PATH = dexterPath('gateway.json');
 const DmPolicySchema = z.enum(['pairing', 'allowlist', 'open', 'disabled']);
@@ -57,6 +58,8 @@ const GatewayConfigSchema = z.object({
       heartbeatSeconds: z.number().optional(),
       reconnect: ReconnectSchema.optional(),
       heartbeat: HeartbeatConfigSchema,
+      model: z.string().optional(),
+      modelProvider: z.string().optional(),
     })
     .optional(),
   channels: z
@@ -104,6 +107,8 @@ export type GatewayConfig = {
       jitter?: number;
       maxAttempts?: number;
     };
+    model?: string;
+    modelProvider?: string;
     heartbeat?: {
       enabled: boolean;
       intervalMinutes: number;
@@ -177,6 +182,8 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
       logLevel: parsed.gateway?.logLevel ?? 'info',
       heartbeatSeconds: parsed.gateway?.heartbeatSeconds,
       reconnect: parsed.gateway?.reconnect,
+      model: parsed.gateway?.model,
+      modelProvider: parsed.gateway?.modelProvider,
       heartbeat: parsed.gateway?.heartbeat
         ? {
             enabled: parsed.gateway.heartbeat.enabled ?? false,
@@ -200,6 +207,24 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
       },
     },
     bindings: parsed.bindings ?? [],
+  };
+}
+
+export function resolveGatewayAgentModel(
+  cfg: GatewayConfig,
+  explicit?: { model?: string; modelProvider?: string },
+): { model: string; modelProvider: string } {
+  return {
+    model:
+      explicit?.model ??
+      cfg.gateway.model ??
+      process.env.DEXTER_AGENT_MODEL ??
+      (getSetting('modelId', 'gpt-5.5') as string),
+    modelProvider:
+      explicit?.modelProvider ??
+      cfg.gateway.modelProvider ??
+      process.env.DEXTER_AGENT_MODEL_PROVIDER ??
+      (getSetting('provider', 'openai') as string),
   };
 }
 
