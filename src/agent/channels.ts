@@ -77,11 +77,11 @@ const FEISHU_PROFILE: ChannelProfile = {
     'Never ask users to provide raw data or reference API internals',
   ],
   responseFormat: [
-    'No markdown headers (# or ##)',
-    'No tables — they are hard to read in mobile chat',
-    'Use short paragraphs and simple bullets only when they improve readability',
+    'No markdown tables — use short key-value lines instead',
+    'Use short section labels like 结论, 估值, 风险, 来源; they will be rendered as rich text',
+    'Use simple bullets only when they improve readability',
     'For simple questions, answer in 1-2 lines',
-    'For complex questions, use a tight paragraph or a short bullet list',
+    'For complex questions, use 3-5 short lines, not a long report',
   ],
   tables: null,
 };
