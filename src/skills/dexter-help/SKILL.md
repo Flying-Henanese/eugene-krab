@@ -1,18 +1,20 @@
 ---
 name: dexter-help
-description: Explain how to use Dexter, what Dexter can do, how to ask effective questions, and how Dexter's tools, skills, gateway, subagents, and financial research workflows help users. Use when the user asks for project usage help, onboarding, "how do I use this", "what can you do", "what features are available", "how should I ask", examples of good prompts, which tools or skills exist, or how CLI/gateway usage differs.
+description: Explain how to use Dexter from Feishu chat, what Dexter can do, how to ask effective questions in Feishu, and how Dexter's tools, skills, gateway, subagents, and financial research workflows help users. Use when the user asks in Feishu for project usage help, onboarding, "how do I use this", "what can you do", "what features are available", "how should I ask", examples of good prompts, which tools or skills exist, what happens behind the scenes, or how Feishu/gateway usage differs from the CLI.
 ---
 
 # Dexter Help Skill
 
-Explain Dexter as an AI financial research assistant for deep company, market, filing, and investment research.
+Explain Dexter as an AI financial research assistant that the user primarily talks to through Feishu chat.
 
 ## Response Workflow
 
-1. Start with the user's entry point:
-   - If they are using the CLI, explain interactive prompts, `/model`, and direct financial questions.
-   - If they are using Feishu/WhatsApp gateway, explain that they can ask natural-language research questions in chat, while CLI-only UI details and approval flows may not appear.
-   - If they are unsure, give both options briefly.
+1. Default to Feishu chat usage:
+   - Explain that the user can ask natural-language research questions directly in Feishu.
+   - Do not lead with CLI commands, slash commands, terminal UI, or local setup unless the user specifically asks about them.
+   - Mention that gateway mode may not show the CLI's live tool stream, approval UI, or subagent progress rows; the final answer should still summarize useful results.
+   - If the user asks about model usage or subagents, explain that the main gateway agent can use the configured main model, while delegated subagents may use the configured cheaper worker model.
+   - If the user explicitly asks about the CLI, answer that separately as an alternate interface.
 
 2. Summarize what Dexter can help with:
    - Market data and price/news snapshots.
@@ -24,7 +26,7 @@ Explain Dexter as an AI financial research assistant for deep company, market, f
    - DCF valuation, X research, and investment memo workflows through skills.
    - Multi-company or multi-topic decomposition through subagents when the task is substantial.
 
-3. Teach how to ask better questions:
+3. Teach how to ask better questions in Feishu:
    - Name the ticker/company and market when possible.
    - State the goal: quick fact, comparison, valuation, memo, risk review, catalyst check, or investment decision support.
    - Specify time horizon and output format if relevant.
@@ -45,7 +47,8 @@ Explain Dexter as an AI financial research assistant for deep company, market, f
    - Some data can be unavailable, delayed, or permission-limited.
    - Web and X sentiment can be noisy and should be cross-checked.
    - Financial analysis is decision support, not investment advice.
-   - Gateway mode may show less live tool/subagent progress than the CLI.
+   - Feishu gateway mode may show less live tool/subagent progress than the CLI.
+   - Feishu responses should favor readable summaries and actionable follow-up prompts over terminal-style status details.
 
 6. End with 2-4 suggested next prompts the user can send immediately.
 

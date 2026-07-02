@@ -12,8 +12,10 @@ describe('skill registry', () => {
     expect(helpSkill?.description).toContain('how to use Dexter');
     expect(helpSkill?.description).toContain('what Dexter can do');
     expect(helpSkill?.description).toContain('how to ask');
+    expect(helpSkill?.description).toContain('Feishu chat');
 
     const loaded = getSkill('dexter-help');
     expect(loaded?.instructions).toContain('Explain Dexter as an AI financial research assistant');
+    expect(loaded?.instructions).toContain('Default to Feishu chat usage');
   });
 });
