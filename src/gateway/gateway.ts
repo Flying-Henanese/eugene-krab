@@ -1,4 +1,9 @@
 import { createChannelManager } from './channels/manager.js';
+import { createFeishuPlugin } from './channels/feishu/plugin.js';
+import {
+  sendMessageFeishu,
+  type FeishuInboundMessage,
+} from './channels/feishu/index.js';
 import { createWhatsAppPlugin } from './channels/whatsapp/plugin.js';
 import {
   assertOutboundAllowed,
@@ -8,7 +13,7 @@ import {
 } from './channels/whatsapp/index.js';
 import { resolveRoute } from './routing/resolve-route.js';
 import { resolveSessionStorePath, upsertSessionMeta } from './sessions/store.js';
-import { loadGatewayConfig, type GatewayConfig } from './config.js';
+import { loadGatewayConfig, resolveFeishuAccount, type GatewayConfig } from './config.js';
 import { runAgentForMessage, isSessionRunning, enqueueForSession } from './agent-runner.js';
 import { cleanMarkdownForWhatsApp } from './utils.js';
 import { startCronRunner } from '../cron/runner.js';
@@ -33,7 +38,7 @@ function debugLog(msg: string) {
 
 export type GatewayService = {
   stop: () => Promise<void>;
-  snapshot: () => Record<string, { accountId: string; running: boolean; connected?: boolean }>;
+  snapshot: () => Record<string, Record<string, { accountId: string; running: boolean; connected?: boolean }>>;
 };
 
 function elide(text: string, maxLen: number): string {
@@ -212,20 +217,98 @@ async function handleInbound(cfg: GatewayConfig, inbound: WhatsAppInboundMessage
   }
 }
 
+async function handleFeishuInbound(cfg: GatewayConfig, inbound: FeishuInboundMessage): Promise<void> {
+  const bodyPreview = elide(inbound.body.replace(/\n/g, ' '), 50);
+  console.log(`Inbound Feishu message ${inbound.chatId} (${inbound.body.length} chars): "${bodyPreview}"`);
+  debugLog(`[gateway] handleFeishuInbound chatId=${inbound.chatId} body="${inbound.body.slice(0, 30)}..."`);
+
+  const route = resolveRoute({
+    cfg,
+    channel: 'feishu',
+    accountId: inbound.accountId,
+    peer: { kind: 'direct', id: inbound.chatId },
+  });
+
+  const storePath = resolveSessionStorePath(route.agentId);
+  upsertSessionMeta({
+    storePath,
+    sessionKey: route.sessionKey,
+    channel: 'feishu',
+    to: inbound.chatId,
+    accountId: route.accountId,
+    agentId: route.agentId,
+  });
+
+  try {
+    const model = getSetting('modelId', 'gpt-5.5') as string;
+    const modelProvider = getSetting('provider', 'openai') as string;
+
+    if (isSessionRunning(route.sessionKey)) {
+      debugLog(`[gateway] agent busy for feishu session=${route.sessionKey}, enqueueing`);
+      enqueueForSession(route.sessionKey, model, inbound.body);
+      return;
+    }
+
+    debugLog(`[gateway] running feishu agent for session=${route.sessionKey}`);
+    const startedAt = Date.now();
+    const answer = await runAgentForMessage({
+      sessionKey: route.sessionKey,
+      query: inbound.body,
+      model,
+      modelProvider,
+      channel: 'feishu',
+    });
+    const durationMs = Date.now() - startedAt;
+
+    if (answer.trim()) {
+      const account = resolveFeishuAccount(cfg, route.accountId);
+      if (!account.appId || !account.appSecret) {
+        throw new Error('Feishu credentials are missing. Set FEISHU_APP_ID and FEISHU_APP_SECRET.');
+      }
+      await sendMessageFeishu({
+        appId: account.appId,
+        appSecret: account.appSecret,
+        chatId: inbound.chatId,
+        body: answer.trim(),
+      });
+      console.log(`Sent Feishu reply (${answer.length} chars, ${durationMs}ms)`);
+      debugLog(`[gateway] feishu reply sent`);
+    } else {
+      console.log(`Agent returned empty Feishu response (${durationMs}ms)`);
+      debugLog(`[gateway] empty feishu answer, not sending`);
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.log(`Error: ${msg}`);
+    debugLog(`[gateway] FEISHU ERROR: ${msg}`);
+  }
+}
+
 export async function startGateway(params: { configPath?: string } = {}): Promise<GatewayService> {
   const cfg = loadGatewayConfig(params.configPath);
-  const plugin = createWhatsAppPlugin({
+  const whatsappPlugin = createWhatsAppPlugin({
     loadConfig: () => loadGatewayConfig(params.configPath),
     onMessage: async (inbound) => {
       const current = loadGatewayConfig(params.configPath);
       await handleInbound(current, inbound);
     },
   });
-  const manager = createChannelManager({
-    plugin,
+  const whatsappManager = createChannelManager({
+    plugin: whatsappPlugin,
     loadConfig: () => loadGatewayConfig(params.configPath),
   });
-  await manager.startAll();
+  const feishuPlugin = createFeishuPlugin({
+    onMessage: async (inbound) => {
+      const current = loadGatewayConfig(params.configPath);
+      await handleFeishuInbound(current, inbound);
+    },
+  });
+  const feishuManager = createChannelManager({
+    plugin: feishuPlugin,
+    loadConfig: () => loadGatewayConfig(params.configPath),
+  });
+  await whatsappManager.startAll();
+  await feishuManager.startAll();
 
   ensureHeartbeatCronJob(params.configPath);
   const cron = startCronRunner({ configPath: params.configPath });
@@ -233,9 +316,12 @@ export async function startGateway(params: { configPath?: string } = {}): Promis
   return {
     stop: async () => {
       cron.stop();
-      await manager.stopAll();
+      await whatsappManager.stopAll();
+      await feishuManager.stopAll();
     },
-    snapshot: () => manager.getSnapshot(),
+    snapshot: () => ({
+      whatsapp: whatsappManager.getSnapshot(),
+      feishu: feishuManager.getSnapshot(),
+    }),
   };
 }
-

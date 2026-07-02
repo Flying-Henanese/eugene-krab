@@ -66,10 +66,31 @@ const WHATSAPP_PROFILE: ChannelProfile = {
   tables: null,
 };
 
+const FEISHU_PROFILE: ChannelProfile = {
+  label: 'Feishu',
+  preamble: 'Your output is delivered via Feishu one-on-one chat. Keep it concise and easy to read on a phone.',
+  behavior: [
+    'You are chatting in a direct Feishu bot conversation',
+    'Keep answers short, practical, and scannable',
+    'Lead with the answer, then add only the context needed to make it useful',
+    'Be precise with financial numbers and dates',
+    'Never ask users to provide raw data or reference API internals',
+  ],
+  responseFormat: [
+    'No markdown headers (# or ##)',
+    'No tables — they are hard to read in mobile chat',
+    'Use short paragraphs and simple bullets only when they improve readability',
+    'For simple questions, answer in 1-2 lines',
+    'For complex questions, use a tight paragraph or a short bullet list',
+  ],
+  tables: null,
+};
+
 /** Registry of channel profiles. Add new channels here. */
 const CHANNEL_PROFILES: Record<string, ChannelProfile> = {
   cli: CLI_PROFILE,
   whatsapp: WHATSAPP_PROFILE,
+  feishu: FEISHU_PROFILE,
 };
 
 /** Resolve the profile for a channel, falling back to CLI. */

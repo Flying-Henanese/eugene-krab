@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { config as loadDotenv } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { createInterface } from 'node:readline/promises';
 import util from 'node:util';
@@ -11,6 +12,8 @@ import {
 } from './config.js';
 import { loginWhatsApp } from './channels/whatsapp/login.js';
 import { startGateway } from './gateway.js';
+
+loadDotenv({ quiet: true });
 
 // Suppress noisy Baileys Signal protocol session logs
 const SUPPRESSED_PREFIXES = [
@@ -135,4 +138,3 @@ async function run(): Promise<void> {
 }
 
 void run();
-

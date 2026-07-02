@@ -26,6 +26,10 @@ const WhatsAppAccountSchema = z.object({
   sendReadReceipts: z.boolean().optional().default(true),
 });
 
+const FeishuAccountSchema = z.object({
+  enabled: z.boolean().optional().default(true),
+});
+
 const HeartbeatConfigSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
@@ -62,6 +66,12 @@ const GatewayConfigSchema = z.object({
           enabled: z.boolean().optional(),
           accounts: z.record(z.string(), WhatsAppAccountSchema).optional(),
           allowFrom: z.array(z.string()).optional(),
+        })
+        .optional(),
+      feishu: z
+        .object({
+          enabled: z.boolean().optional(),
+          accounts: z.record(z.string(), FeishuAccountSchema).optional(),
         })
         .optional(),
     })
@@ -109,6 +119,10 @@ export type GatewayConfig = {
       accounts: Record<string, z.infer<typeof WhatsAppAccountSchema>>;
       allowFrom: string[];
     };
+    feishu: {
+      enabled: boolean;
+      accounts: Record<string, z.infer<typeof FeishuAccountSchema>>;
+    };
   };
   bindings: Array<{
     agentId: string;
@@ -119,6 +133,12 @@ export type GatewayConfig = {
       peerKind?: 'direct' | 'group';
     };
   }>;
+};
+export type FeishuAccountConfig = {
+  accountId: string;
+  enabled: boolean;
+  appId?: string;
+  appSecret?: string;
 };
 export type WhatsAppAccountConfig = {
   accountId: string;
@@ -141,7 +161,10 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
   if (!existsSync(path)) {
     return {
       gateway: { accountId: 'default', logLevel: 'info' },
-      channels: { whatsapp: { enabled: true, accounts: {}, allowFrom: [] } },
+      channels: {
+        whatsapp: { enabled: true, accounts: {}, allowFrom: [] },
+        feishu: { enabled: false, accounts: {} },
+      },
       bindings: [],
     };
   }
@@ -171,6 +194,10 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
         accounts: parsed.channels?.whatsapp?.accounts ?? {},
         allowFrom: parsed.channels?.whatsapp?.allowFrom ?? [],
       },
+      feishu: {
+        enabled: parsed.channels?.feishu?.enabled ?? false,
+        accounts: parsed.channels?.feishu?.accounts ?? {},
+      },
     },
     bindings: parsed.bindings ?? [],
   };
@@ -189,6 +216,22 @@ export function listWhatsAppAccountIds(cfg: GatewayConfig): string[] {
   const accounts = cfg.channels.whatsapp.accounts ?? {};
   const ids = Object.keys(accounts);
   return ids.length > 0 ? ids : [cfg.gateway.accountId];
+}
+
+export function listFeishuAccountIds(cfg: GatewayConfig): string[] {
+  const accounts = cfg.channels.feishu.accounts ?? {};
+  const ids = Object.keys(accounts);
+  return ids.length > 0 ? ids : [cfg.gateway.accountId];
+}
+
+export function resolveFeishuAccount(cfg: GatewayConfig, accountId: string): FeishuAccountConfig {
+  const account = cfg.channels.feishu.accounts?.[accountId] ?? {};
+  return {
+    accountId,
+    enabled: account.enabled ?? cfg.channels.feishu.enabled,
+    appId: process.env.FEISHU_APP_ID,
+    appSecret: process.env.FEISHU_APP_SECRET,
+  };
 }
 
 export function resolveWhatsAppAccount(
@@ -218,4 +261,3 @@ export function resolveWhatsAppAccount(
     sendReadReceipts: account.sendReadReceipts ?? true,
   };
 }
-

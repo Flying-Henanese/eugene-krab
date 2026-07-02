@@ -1,5 +1,5 @@
 export type InboundContext = {
-  channel: 'whatsapp';
+  channel: 'whatsapp' | 'feishu';
   accountId: string;
   from: string;
   to: string;
@@ -8,4 +8,3 @@ export type InboundContext = {
   senderName?: string;
   messageId?: string;
 };
-

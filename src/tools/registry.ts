@@ -14,6 +14,7 @@ import { GET_FINANCIALS_DESCRIPTION } from './finance/get-financials.js';
 import { GET_MARKET_DATA_DESCRIPTION } from './finance/get-market-data.js';
 import { READ_FILINGS_DESCRIPTION } from './finance/read-filings.js';
 import { SCREEN_STOCKS_DESCRIPTION } from './finance/screen-stocks.js';
+import { A_SHARE_ANALYSIS_DESCRIPTION, createAShareAnalysis } from './finance/tushare/index.js';
 import { heartbeatTool, HEARTBEAT_TOOL_DESCRIPTION } from './heartbeat/heartbeat-tool.js';
 import { cronTool, CRON_TOOL_DESCRIPTION } from './cron/cron-tool.js';
 import { memoryGetTool, MEMORY_GET_DESCRIPTION, memorySearchTool, MEMORY_SEARCH_DESCRIPTION, memoryUpdateTool, MEMORY_UPDATE_DESCRIPTION } from './memory/index.js';
@@ -190,6 +191,16 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       tool: createWebSearchTool(orderedProviders),
       description: WEB_SEARCH_DESCRIPTION,
       compactDescription: 'Search the web for current information. Returns titles, URLs, and snippets.',
+      concurrencySafe: true,
+    });
+  }
+
+  if (process.env.TUSHARE_TOKEN) {
+    tools.push({
+      name: 'a_share_analysis',
+      tool: createAShareAnalysis(),
+      description: A_SHARE_ANALYSIS_DESCRIPTION,
+      compactDescription: 'China A-share structured data via Tushare. Use for A-share tickers/names, PE/PB/ROE/revenue/profit/cash-flow snapshots; pair with web_search for current Chinese market context.',
       concurrencySafe: true,
     });
   }
