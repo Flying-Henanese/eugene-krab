@@ -1,192 +1,197 @@
-# Dexter 🤖
+# Eugene Krab
 
-Dexter is an autonomous financial research agent that thinks, plans, and learns as it works. It performs analysis using task planning, self-reflection, and real-time market data. Think Claude Code, but built specifically for financial research.
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-<img width="665" height="452" alt="Screenshot 2026-04-02 at 4 16 57 PM" src="https://github.com/user-attachments/assets/02418111-5f48-4a66-be5d-dc9bf9806284" />
+Eugene Krab is a fork of [Dexter](https://github.com/virattt/dexter): a CLI-based AI agent for deep financial research, built with TypeScript, Ink, LangChain, and Bun.
+
+This fork keeps Dexter's autonomous financial research loop, then adds a gateway-first workflow for using the agent from chat apps, especially Feishu one-on-one conversations. It also separates main-agent and subagent model policy so expensive reasoning can stay where it matters while delegated work can use faster models.
+
+<p align="center">
+  <img width="520" alt="Eugene Krab sitting in a pile of coins" src="docs/assets/eugene-krab.png" />
+</p>
+
+## What Changed From Dexter
+
+- Added Feishu gateway support through the Feishu/Lark `WSClient` long connection.
+- Supports Feishu one-on-one text chats and sends agent answers back to the same chat.
+- Added Feishu-specific message parsing, deduplication, outbound formatting, and channel profile handling.
+- Added gateway/headless model selection via environment variables, useful when running outside the interactive CLI.
+- Split main-agent and subagent model configuration with `SUBAGENT_MODEL` and optional analysis-specific overrides.
+- Added reasoning-effort controls such as `DEEPSEEK_REASONING_EFFORT` and `DEEPSEEK_SUBAGENT_REASONING_EFFORT`.
+- Kept Dexter's original finance research tools, scratchpad, browser/search tools, skills, and evaluation workflow.
 
 ## Table of Contents
 
-- [👋 Overview](#-overview)
-- [✅ Prerequisites](#-prerequisites)
-- [💻 How to Install](#-how-to-install)
-- [🚀 How to Run](#-how-to-run)
-- [📊 How to Evaluate](#-how-to-evaluate)
-- [🐛 How to Debug](#-how-to-debug)
-- [📱 How to Use with WhatsApp](#-how-to-use-with-whatsapp)
-- [🤝 How to Contribute](#-how-to-contribute)
-- [📄 License](#-license)
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Install](#install)
+- [Environment](#environment)
+- [Run The CLI](#run-the-cli)
+- [Run The Gateway](#run-the-gateway)
+- [Evaluate](#evaluate)
+- [Debug](#debug)
+- [Contributing](#contributing)
+- [License](#license)
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-This project is for **educational, entertainment, and informational purposes only**. It is not intended for real trading or investment.
+This project is for educational, entertainment, and informational purposes only. It is not intended for real trading or investment.
 
-- Not financial, investment, tax, or legal advice
-- No guarantees of accuracy, completeness, or fitness for any purpose
-- Outputs may be incorrect, incomplete, or out of date
-- Creator and contributors assume no liability for any financial losses or damages
-- Consult a licensed financial advisor before making investment decisions
-- Past performance does not indicate future results
+- Not financial, investment, tax, or legal advice.
+- No guarantees of accuracy, completeness, or fitness for any purpose.
+- Outputs may be incorrect, incomplete, or out of date.
+- Creator and contributors assume no liability for financial losses or damages.
+- Consult a licensed financial advisor before making investment decisions.
+- Past performance does not indicate future results.
 
 By using this software, you agree to use it solely for learning and informational purposes and accept all risks associated with its use.
 
-## 👋 Overview
+## Overview
 
-Dexter takes complex financial questions and turns them into clear, step-by-step research plans. It runs those tasks using live market data, checks its own work, and refines the results until it has a confident, data-backed answer.  
+Eugene Krab takes complex financial questions and turns them into structured research plans. It can gather market data, read filings, browse web context, delegate focused subtasks to subagents, and synthesize a final answer from its scratchpad.
 
-**Key Capabilities:**
-- **Intelligent Task Planning**: Automatically decomposes complex queries into structured research steps
-- **Autonomous Execution**: Selects and executes the right tools to gather financial data
-- **Self-Validation**: Checks its own work and iterates until tasks are complete
-- **Real-Time Financial Data**: Access to income statements, balance sheets, and cash flow statements
-- **Safety Features**: Built-in loop detection and step limits to prevent runaway execution
+Key capabilities:
 
-[![Twitter Follow](https://img.shields.io/twitter/follow/virattt?style=social)](https://twitter.com/virattt) [![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?style=social&logo=discord)](https://discord.gg/jpGHv2XB6T)
+- Intelligent task planning for multi-step financial research.
+- Autonomous tool use across financial data, filings, web search, browser scraping, and skills.
+- Subagent delegation for focused parallel research tasks.
+- Channel-aware answers for CLI, WhatsApp, and Feishu.
+- Model-aware context compaction and fast-model summarization.
+- Configurable main-agent, subagent, and reasoning-effort policies.
 
-<img width="1042" height="638" alt="Screenshot 2026-02-18 at 12 21 25 PM" src="https://github.com/user-attachments/assets/2a6334f9-863f-4bd2-a56f-923e42f4711e" />
+## Prerequisites
 
+- [Bun](https://bun.com) runtime, v1.0 or higher.
+- At least one LLM API key, such as OpenAI, Anthropic, Google, xAI, OpenRouter, DeepSeek, or Ollama.
+- `FINANCIAL_DATASETS_API_KEY` for US/global financial data.
+- `EXASEARCH_API_KEY` or `TAVILY_API_KEY` for web search.
+- `FEISHU_APP_ID` and `FEISHU_APP_SECRET` if you want to run the Feishu gateway.
 
-## ✅ Prerequisites
+Install Bun:
 
-- [Bun](https://bun.com) runtime (v1.0 or higher)
-- OpenAI API key (get [here](https://platform.openai.com/api-keys))
-- Financial Datasets API key (get [here](https://financialdatasets.ai))
-- Exa API key (get [here](https://exa.ai)) - optional, for web search
-
-#### Installing Bun
-
-If you don't have Bun installed, you can install it using curl:
-
-**macOS/Linux:**
 ```bash
+# macOS/Linux
 curl -fsSL https://bun.com/install | bash
-```
 
-**Windows:**
-```bash
+# Windows
 powershell -c "irm bun.sh/install.ps1|iex"
 ```
 
-After installation, restart your terminal and verify Bun is installed:
-```bash
-bun --version
-```
+## Install
 
-## 💻 How to Install
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/virattt/dexter.git
-cd dexter
-```
-
-2. Install dependencies with Bun:
-```bash
+git clone https://github.com/Flying-Henanese/eugene-krab.git
+cd eugene-krab
 bun install
 ```
 
-3. Set up your environment variables:
+## Environment
+
+Copy the example file and fill in the keys you need:
+
 ```bash
-# Copy the example environment file
 cp env.example .env
-
-# Edit .env and add your API keys (if using cloud providers)
-# OPENAI_API_KEY=your-openai-api-key
-# ANTHROPIC_API_KEY=your-anthropic-api-key (optional)
-# GOOGLE_API_KEY=your-google-api-key (optional)
-# XAI_API_KEY=your-xai-api-key (optional)
-# OPENROUTER_API_KEY=your-openrouter-api-key (optional)
-
-# Institutional-grade market data for agents
-# FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
-
-# (Optional) If using Ollama locally
-# OLLAMA_BASE_URL=http://127.0.0.1:11434
-
-# Web Search (Exa preferred, Tavily fallback)
-# EXASEARCH_API_KEY=your-exa-api-key
-# TAVILY_API_KEY=your-tavily-api-key
 ```
 
-## 🚀 How to Run
+Common variables:
 
-Run Dexter in interactive mode:
+```bash
+# LLM providers
+OPENAI_API_KEY=your-openai-api-key
+ANTHROPIC_API_KEY=your-anthropic-api-key
+GOOGLE_API_KEY=your-google-api-key
+XAI_API_KEY=your-xai-api-key
+OPENROUTER_API_KEY=your-openrouter-api-key
+DEEPSEEK_API_KEY=your-deepseek-api-key
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+
+# Finance and search
+FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
+EXASEARCH_API_KEY=your-exa-api-key
+TAVILY_API_KEY=your-tavily-api-key
+
+# Gateway/headless model policy
+DEXTER_AGENT_MODEL=deepseek-v4-pro
+DEXTER_AGENT_MODEL_PROVIDER=deepseek
+SUBAGENT_MODEL=deepseek-v4-flash
+SUBAGENT_ANALYSIS_MODEL=deepseek-v4-pro
+
+# Reasoning effort
+DEEPSEEK_REASONING_EFFORT=high
+DEEPSEEK_SUBAGENT_REASONING_EFFORT=low
+
+# Feishu gateway
+FEISHU_APP_ID=your-feishu-app-id
+FEISHU_APP_SECRET=your-feishu-app-secret
+```
+
+Never commit `.env` files or real API keys.
+
+## Run The CLI
+
 ```bash
 bun start
 ```
 
-Or with watch mode for development:
+Development watch mode:
+
 ```bash
 bun dev
 ```
 
-## 📊 How to Evaluate
+Inside the CLI, use `/model` to switch providers and models interactively.
 
-Dexter includes an evaluation suite that tests the agent against a dataset of financial questions. Evals use LangSmith for tracking and an LLM-as-judge approach for scoring correctness.
+## Run The Gateway
 
-**Run on all questions:**
+The gateway lets Eugene Krab answer chat messages. WhatsApp support comes from Dexter; this fork adds Feishu support.
+
+```bash
+bun run gateway
+```
+
+For WhatsApp login:
+
+```bash
+bun run gateway:login
+```
+
+For Feishu, configure the app credentials in `.env`, enable the Feishu channel in the gateway config, then send a one-on-one text message to the bot. The first Feishu implementation is intentionally scoped to direct text chats: no group chats, webhooks, cards, images, or local allowlist.
+
+## Evaluate
+
+Run the full evaluation suite:
+
 ```bash
 bun run src/evals/run.ts
 ```
 
-**Run on a random sample of data:**
+Run a sampled evaluation:
+
 ```bash
 bun run src/evals/run.ts --sample 10
 ```
 
-The eval runner displays a real-time UI showing progress, current question, and running accuracy statistics. Results are logged to LangSmith for analysis.
+## Debug
 
-## 🐛 How to Debug
+Each query writes a JSONL scratchpad under `.dexter/scratchpad/`. It records the original query, tool calls, tool results, model summaries, and thinking events so you can inspect how an answer was produced.
 
-Dexter logs all tool calls to a scratchpad file for debugging and history tracking. Each query creates a new JSONL file in `.dexter/scratchpad/`.
-
-**Scratchpad location:**
-```
+```text
 .dexter/scratchpad/
-├── 2026-01-30-111400_9a8f10723f79.jsonl
-├── 2026-01-30-143022_a1b2c3d4e5f6.jsonl
-└── ...
+|-- 2026-01-30-111400_9a8f10723f79.jsonl
+|-- 2026-01-30-143022_a1b2c3d4e5f6.jsonl
+`-- ...
 ```
 
-Each file contains newline-delimited JSON entries tracking:
-- **init**: The original query
-- **tool_result**: Each tool call with arguments, raw result, and LLM summary
-- **thinking**: Agent reasoning steps
+## Contributing
 
-**Example scratchpad entry:**
-```json
-{"type":"tool_result","timestamp":"2026-01-30T11:14:05.123Z","toolName":"get_income_statements","args":{"ticker":"AAPL","period":"annual","limit":5},"result":{...},"llmSummary":"Retrieved 5 years of Apple annual income statements showing revenue growth from $274B to $394B"}
-```
+1. Fork the repository.
+2. Create a feature branch.
+3. Keep changes focused.
+4. Run `bun run typecheck` and `bun test` when touching logic.
+5. Open a pull request.
 
-This makes it easy to inspect exactly what data the agent gathered and how it interpreted results.
+Do not push, tag, publish, or create releases without explicit confirmation.
 
-## 📱 How to Use with WhatsApp
-
-Chat with Dexter through WhatsApp by linking your phone to the gateway. Messages you send to yourself are processed by Dexter and responses are sent back to the same chat.
-
-**Quick start:**
-```bash
-# Link your WhatsApp account (scan QR code)
-bun run gateway:login
-
-# Start the gateway
-bun run gateway
-```
-
-Then open WhatsApp, go to your own chat (message yourself), and ask Dexter a question.
-
-For detailed setup instructions, configuration options, and troubleshooting, see the [WhatsApp Gateway README](src/gateway/channels/whatsapp/README.md).
-
-## 🤝 How to Contribute
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
-**Important**: Please keep your pull requests small and focused.  This will make it easier to review and merge.
-
-
-## 📄 License
+## License
 
 This project is licensed under the MIT License.
