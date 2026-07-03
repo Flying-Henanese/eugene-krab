@@ -9,8 +9,6 @@ services:
     working_dir: /app
     env_file:
       - .env
-    environment:
-      PLAYWRIGHT_DOWNLOAD_HOST: https://npmmirror.com/mirrors/playwright
     volumes:
       - ./.dexter:/app/.dexter
     command: >
