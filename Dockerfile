@@ -2,7 +2,7 @@ FROM docker.m.daocloud.io/oven/bun:1-debian
 
 WORKDIR /app
 
-#ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
 
 # 更换 Debian APT 源（中科大）
 RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
@@ -12,8 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
-    nodejs \
-    npm \
     python3 \
     make \
     g++ \
@@ -35,10 +33,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json* ./
+COPY package.json bun.lock ./
 
-RUN npm config set registry https://registry.npmmirror.com \
- && npm install
+RUN bun install --frozen-lockfile --registry https://registry.npmmirror.com
 
 COPY . .
 
