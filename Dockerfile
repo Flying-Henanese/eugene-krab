@@ -38,7 +38,7 @@ RUN apt-get update -o Acquire::Retries=5 \
 COPY package.json bun.lock ./
 
 RUN bun install --frozen-lockfile --ignore-scripts --registry https://registry.npmmirror.com \
-  && bunx playwright install chromium
+  && bun ./node_modules/playwright/cli.js install chromium
 
 COPY . .
 
