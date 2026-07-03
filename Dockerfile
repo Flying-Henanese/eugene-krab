@@ -1,13 +1,23 @@
-FROM oven/bun:1-debian
+FROM docker.m.daocloud.io/oven/bun:1-debian
 
 WORKDIR /app
 
-ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+#ENV PLAYWRIGHT_DOWNLOAD_HOST=https://npmmirror.com/mirrors/playwright
+
+# 更换 Debian APT 源（中科大）
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
+ && sed -i 's|security.debian.org|mirrors.ustc.edu.cn/debian-security|g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     git \
+    nodejs \
+    npm \
+    python3 \
+    make \
+    g++ \
+    build-essential \
     libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
@@ -25,8 +35,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xvfb \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --registry https://registry.npmmirror.com
+COPY package.json package-lock.json* ./
+
+RUN npm config set registry https://registry.npmmirror.com \
+ && npm install
 
 COPY . .
 
