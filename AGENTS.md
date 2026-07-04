@@ -2,26 +2,42 @@
 
 - Repo: https://github.com/virattt/dexter
 - Dexter is a CLI-based AI agent for deep financial research, built with TypeScript, Ink (React for CLI), and LangChain.
+- For nontrivial repo work, read `.harness/README.md` after this file and follow its task routing to the smallest relevant context/checklist files. Treat `AGENTS.md` as the root map and `.harness/` as the repo-local operating manual.
 - Before implementing Feishu support, read `docs/superpowers/specs/2026-07-01-feishu-wsclient-design.md`. It captures the agreed scope: Feishu WSClient long connection, one-on-one text chats only, credentials in `.env`, no project-local allowlist for the first version.
 - Before implementing A-share analysis with Tushare and Tavily, read `docs/superpowers/specs/2026-07-02-tushare-tavily-stock-analysis-design.md`. It captures the agreed scope: Tushare for A-share structured data, Tavily/web_search for current Chinese market context, and Financial Datasets retained for US/global equities.
+
+## Harness Context Routing
+
+- Project orientation or architecture questions: read `.harness/context/project-overview.md` and `.harness/context/architecture-map.md`.
+- Runtime, env, model, or gateway startup work: read `.harness/context/runtime-and-config.md`.
+- Tool, skill, or subagent work: read `.harness/context/tools-skills-and-subagents.md`.
+- Feishu, WhatsApp, or gateway channel work: read `.harness/context/gateway-and-channels.md`.
+- Financial data source or A-share work: read `.harness/context/market-data-sources.md`.
+- Security-sensitive changes: read `.harness/checklists/security.md`.
+- Before editing code, use `.harness/checklists/code-change.md`; before claiming completion, use `.harness/checklists/verification.md`.
 
 ## Project Structure
 
 - Source code: `src/`
   - Agent core: `src/agent/` (agent loop, prompts, scratchpad, token counting, types)
-  - CLI interface: `src/cli.tsx` (Ink/React), entry point: `src/index.tsx`
+  - CLI interface: `src/cli.ts` (Ink/React), entry point: `src/index.tsx`
   - Components: `src/components/` (Ink UI components)
-  - Hooks: `src/hooks/` (React hooks for agent runner, model selection, input history)
+  - Controllers: `src/controllers/` (agent runner, model/search selection, input history)
+  - Gateway: `src/gateway/` (headless chat gateway, channels, routing, sessions, heartbeat)
+  - Gateway channels: `src/gateway/channels/` (WhatsApp and Feishu plugins)
   - Model/LLM: `src/model/llm.ts` (multi-provider LLM abstraction)
-  - Tools: `src/tools/` (financial search, web search, browser, skill tool)
-  - Tool descriptions: `src/tools/descriptions/` (rich descriptions injected into system prompt)
-  - Finance tools: `src/tools/finance/` (prices, fundamentals, filings, insider trades, etc.)
-  - Search tools: `src/tools/search/` (Exa preferred, Tavily fallback)
-  - Browser: `src/tools/browser/` (Playwright-based web scraping)
-  - Skills: `src/skills/` (SKILL.md-based extensible workflows, e.g. DCF valuation)
-  - Utils: `src/utils/` (env, config, caching, token estimation, markdown tables)
+  - Provider metadata: `src/providers.ts` (provider IDs, model prefixes, fast models, context windows)
+  - Tools: `src/tools/` (finance, search, browser, fetch, filesystem, subagent, memory, cron, heartbeat, skill)
+  - Finance tools: `src/tools/finance/` (financials, market data, filings, screeners, Tushare A-share analysis)
+  - Search tools: `src/tools/search/` (Exa, Perplexity, Tavily, LangSearch, X search)
+  - Browser/fetch: `src/tools/browser/`, `src/tools/fetch/` (Playwright browser and URL fetch/summarization)
+  - Skills: `src/skills/` (SKILL.md-based extensible workflows, e.g. DCF, X research, memo writing)
+  - Persistent memory: `src/memory/` and `src/tools/memory/`
+  - Cron: `src/cron/` and `src/tools/cron/`
+  - Utils: `src/utils/` (env, config, paths, caching, token estimation, tool-result storage)
   - Evals: `src/evals/` (LangSmith evaluation runner with Ink UI)
 - Config: `.dexter/settings.json` (persisted model/provider selection)
+- Gateway config: `.dexter/gateway.json` by default, or `DEXTER_GATEWAY_CONFIG`
 - Environment: `.env` (API keys; see `env.example`)
 - Scripts: `scripts/release.sh`
 
@@ -31,6 +47,8 @@
 - Install deps: `bun install`
 - Run: `bun run start` or `bun run src/index.tsx`
 - Dev (watch mode): `bun run dev`
+- Gateway: `bun run gateway`
+- WhatsApp login/setup: `bun run gateway:login`
 - Type-check: `bun run typecheck`
 - Tests: `bun test`
 - Evals: `bun run src/evals/run.ts` (full) or `bun run src/evals/run.ts --sample 10` (sampled)
@@ -47,19 +65,30 @@
 
 ## LLM Providers
 
-- Supported: OpenAI (default), Anthropic, Google, xAI (Grok), OpenRouter, Ollama (local).
+- Supported: OpenAI (default), Anthropic, Google, xAI (Grok), Moonshot, DeepSeek, OpenRouter, Ollama (local), and Ollama Cloud.
 - Default model: `gpt-5.5`. Provider detection is prefix-based (`claude-` -> Anthropic, `gemini-` -> Google, etc.).
-- Fast models for lightweight tasks: see `FAST_MODELS` map in `src/model/llm.ts`.
+- Fast models and provider metadata live in `src/providers.ts`.
 - Anthropic uses explicit `cache_control` on system prompt for prompt caching cost savings.
 - Users switch providers/models via `/model` command in the CLI.
+- Gateway/headless runs can use `DEXTER_AGENT_MODEL` and `DEXTER_AGENT_MODEL_PROVIDER`.
+- Subagents can use `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, and DeepSeek reasoning-effort env vars.
 
 ## Tools
 
-- `financial_search`: primary tool for all financial data queries (prices, metrics, filings). Delegates to multiple sub-tools internally.
-- `financial_metrics`: direct metric lookups (revenue, market cap, etc.).
+- `get_financials`: financial statements and metrics.
+- `get_market_data`: prices, company news, crypto data, and insider trades.
 - `read_filings`: SEC filing reader for 10-K, 10-Q, 8-K documents.
-- `web_search`: general web search (Exa if `EXASEARCH_API_KEY` set, else Tavily if `TAVILY_API_KEY` set).
+- `stock_screener`: screen stocks by financial criteria.
+- `spawn_subagent`: delegate focused isolated subtasks to subagents.
+- `ask_user_question`: CLI-only multiple-choice user questions.
+- `web_fetch`: fetch and summarize URL content.
+- `web_search`: general web search over configured providers (Exa, Perplexity, Tavily, LangSearch).
 - `browser`: Playwright-based web scraping for reading pages the agent discovers.
+- `read_file`, `write_file`, `edit_file`: sandbox-aware local file tools; write/edit require approval.
+- `heartbeat`, `cron`: periodic checklist and scheduled job tools.
+- `memory_search`, `memory_get`, `memory_update`: persistent memory tools.
+- `a_share_analysis`: Tushare-backed China A-share structured analysis, enabled by `TUSHARE_TOKEN`.
+- `x_search`: X/Twitter search, enabled by `X_BEARER_TOKEN`.
 - `skill`: invokes SKILL.md-defined workflows (e.g. DCF valuation). Each skill runs at most once per query.
 - Tool registry: `src/tools/registry.ts`. Tools are conditionally included based on env vars.
 
@@ -81,9 +110,13 @@
 ## Environment Variables
 
 - LLM keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`
+- Additional providers: `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`, `OLLAMA_CLOUD_API_KEY`
 - Ollama: `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`)
-- Finance: `FINANCIAL_DATASETS_API_KEY`
-- Search: `EXASEARCH_API_KEY` (preferred), `TAVILY_API_KEY` (fallback)
+- Gateway/headless models: `DEXTER_AGENT_MODEL`, `DEXTER_AGENT_MODEL_PROVIDER`
+- Subagents: `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, `DEEPSEEK_REASONING_EFFORT`, `DEEPSEEK_SUBAGENT_REASONING_EFFORT`
+- Finance: `FINANCIAL_DATASETS_API_KEY`, `TUSHARE_TOKEN`
+- Search: `EXASEARCH_API_KEY`, `PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `LANGSEARCH_API_KEY`, `X_BEARER_TOKEN`
+- Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
 - Tracing: `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING`
 - Never commit `.env` files or real API keys.
 
