@@ -28,7 +28,7 @@
   - Model/LLM: `src/model/llm.ts` (multi-provider LLM abstraction)
   - Provider metadata: `src/providers.ts` (provider IDs, model prefixes, fast models, context windows)
   - Tools: `src/tools/` (finance, search, browser, fetch, filesystem, subagent, memory, cron, heartbeat, skill)
-  - Finance tools: `src/tools/finance/` (financials, market data, filings, screeners, Tushare A-share analysis)
+  - Finance tools: `src/tools/finance/` (financials, market data, filings, screeners, Tushare A-share analysis and market sentiment)
   - Search tools: `src/tools/search/` (Exa, Perplexity, Tavily, LangSearch, X search)
   - Browser/fetch: `src/tools/browser/`, `src/tools/fetch/` (Playwright browser and URL fetch/summarization)
   - Skills: `src/skills/` (SKILL.md-based extensible workflows, e.g. DCF, X research, memo writing)
@@ -88,6 +88,7 @@
 - `heartbeat`, `cron`: periodic checklist and scheduled job tools.
 - `memory_search`, `memory_get`, `memory_update`: persistent memory tools.
 - `a_share_analysis`: Tushare-backed China A-share structured analysis, enabled by `TUSHARE_TOKEN`.
+- `market_sentiment_analysis`: Tushare-backed China A-share broad market sentiment analysis, enabled by `TUSHARE_TOKEN`.
 - `x_search`: X/Twitter search, enabled by `X_BEARER_TOKEN`.
 - `skill`: invokes SKILL.md-defined workflows (e.g. DCF valuation). Each skill runs at most once per query.
 - Tool registry: `src/tools/registry.ts`. Tools are conditionally included based on env vars.

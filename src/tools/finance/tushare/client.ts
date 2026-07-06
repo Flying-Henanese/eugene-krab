@@ -6,7 +6,15 @@ export type TushareApiName =
   | 'balancesheet'
   | 'cashflow'
   | 'fina_indicator'
-  | 'namechange';
+  | 'namechange'
+  | 'trade_cal'
+  | 'index_daily'
+  | 'limit_list_d'
+  | 'moneyflow'
+  | 'index_classify'
+  | 'index_member'
+  | 'ths_index'
+  | 'ths_daily';
 
 export type TushareRow = Record<string, string | number | null>;
 

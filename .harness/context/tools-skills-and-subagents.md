@@ -18,6 +18,7 @@ The registry always includes core finance, browser/fetch/filesystem, memory, cro
 
 - `web_search` appears only when at least one configured provider key exists: Exa, Perplexity, Tavily, or LangSearch.
 - `a_share_analysis` appears only when `TUSHARE_TOKEN` is set.
+- `market_sentiment_analysis` appears only when `TUSHARE_TOKEN` is set.
 - `x_search` appears only when `X_BEARER_TOKEN` is set.
 - `ask_user_question` is CLI-only. `Agent.create()` removes it for non-CLI channels.
 

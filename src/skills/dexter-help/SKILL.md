@@ -21,6 +21,7 @@ Explain Dexter as an AI financial research assistant that the user primarily tal
    - Financial statements, metrics, fundamentals, and company facts.
    - SEC filing reading and filing-section extraction.
    - A-share analysis through Tushare when configured.
+   - China A-share broad market sentiment analysis through `market_sentiment_analysis` when `TUSHARE_TOKEN` is configured.
    - Current web/search context through configured search providers.
    - X/Twitter sentiment research when `X_BEARER_TOKEN` is configured.
    - DCF valuation, X research, and investment memo workflows through skills.
@@ -39,6 +40,7 @@ Explain Dexter as an AI financial research assistant that the user primarily tal
    - Comparison: "Compare AAPL, MSFT, and NVDA on financial quality, valuation, and growth prospects."
    - DCF: "Run a DCF valuation for AAPL and show the sensitivity table."
    - A-share: "分析贵州茅台的估值、盈利质量、近期市场背景和主要风险。"
+   - China market sentiment: "请分析 20260703 A 股整体市场情绪，重点看市场宽度、涨跌停、行业热度、资金流，并结合新闻解释。"
    - Sentiment: "Check X/Twitter sentiment on TSLA over the last 7 days."
    - Memo: "Write a long investment memo for ASML with a 12-month horizon."
 
