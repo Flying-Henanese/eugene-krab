@@ -10,6 +10,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ./src:/app/src
       - ./.dexter:/app/.dexter
     command: >
       sh -lc "xvfb-run -a bun run gateway"
