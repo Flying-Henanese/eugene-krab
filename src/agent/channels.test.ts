@@ -6,8 +6,8 @@ describe('getChannelProfile', () => {
     const profile = getChannelProfile('feishu');
 
     expect(profile.label).toBe('Feishu');
-    expect(profile.tables).toBeNull();
-    expect(profile.responseFormat.join('\n')).toContain('No markdown tables');
+    expect(profile.tables).toContain('Use markdown tables');
+    expect(profile.responseFormat.join('\n')).toContain('Use markdown tables for compact comparative data');
     expect(profile.responseFormat.join('\n')).toContain('Use short section labels');
   });
 });

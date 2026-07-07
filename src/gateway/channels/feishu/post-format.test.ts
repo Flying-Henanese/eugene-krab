@@ -38,7 +38,7 @@ describe('formatFeishuPostContent', () => {
     ]);
   });
 
-  test('converts markdown tables into compact text lines', () => {
+  test('preserves markdown tables so Feishu can render them directly', () => {
     const result = formatFeishuPostContent([
       '| 指标 | 数值 |',
       '|---|---|',
@@ -47,9 +47,10 @@ describe('formatFeishuPostContent', () => {
     ].join('\n'));
 
     expect(result.zh_cn.content).toEqual([
-      [{ tag: 'text', text: '指标：数值', style: ['bold'] }],
-      [{ tag: 'text', text: 'PE：22.5' }],
-      [{ tag: 'text', text: 'PB：2.1' }],
+      [{ tag: 'text', text: '| 指标 | 数值 |' }],
+      [{ tag: 'text', text: '|---|---|' }],
+      [{ tag: 'text', text: '| PE | 22.5 |' }],
+      [{ tag: 'text', text: '| PB | 2.1 |' }],
     ]);
   });
 

@@ -77,13 +77,23 @@ const FEISHU_PROFILE: ChannelProfile = {
     'Never ask users to provide raw data or reference API internals',
   ],
   responseFormat: [
-    'No markdown tables — use short key-value lines instead',
+    'Use markdown tables for compact comparative data; keep them narrow enough for chat',
     'Use short section labels like 结论, 估值, 风险, 来源; they will be rendered as rich text',
     'Use simple bullets only when they improve readability',
     'For simple questions, answer in 1-2 lines',
     'For complex questions, use 3-5 short lines, not a long report',
   ],
-  tables: null,
+  tables: `Use markdown tables for compact comparative data. Feishu will receive the table syntax directly.
+
+STRICT FORMAT - each row must:
+- Start with | and end with |
+- Have no trailing spaces after the final |
+- Use |---| separator (with optional : for alignment)
+
+Keep Feishu tables compact:
+- Prefer 2-4 columns
+- Split wide tables into multiple smaller tables
+- Use short headers and compact numbers`,
 };
 
 /** Registry of channel profiles. Add new channels here. */

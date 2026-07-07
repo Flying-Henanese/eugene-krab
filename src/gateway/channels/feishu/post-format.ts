@@ -44,21 +44,9 @@ export function formatFeishuPostContent(body: string): FeishuPostContent {
       continue;
     }
 
-    if (!inCodeFence && isMarkdownTableSeparator(rawLine)) {
-      continue;
-    }
-
-    const isTableRow = !inCodeFence && isMarkdownTableRow(rawLine);
-    const isTableHeader = isTableRow && isMarkdownTableSeparator(lines[index + 1] ?? '');
-    const convertedLine = isTableRow ? tableRowToText(rawLine) : rawLine;
-    const line = stripInlineCode(convertedLine).trim();
+    const line = stripInlineCode(rawLine).trim();
 
     if (!line) {
-      continue;
-    }
-
-    if (isTableHeader) {
-      content.push([{ tag: 'text', text: line, style: ['bold'] }]);
       continue;
     }
 
@@ -92,37 +80,8 @@ function stripInlineCode(line: string): string {
   return line.replace(/`([^`]+)`/g, '$1');
 }
 
-function isMarkdownTableRow(line: string): boolean {
-  const trimmed = line.trim();
-  return trimmed.startsWith('|') && trimmed.endsWith('|') && splitTableCells(trimmed).length >= 2;
-}
-
-function isMarkdownTableSeparator(line: string): boolean {
-  const cells = splitTableCells(line);
-  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
-}
-
 function isMarkdownHorizontalRule(line: string): boolean {
   return /^[-*_]{3,}$/.test(line.replace(/\s+/g, ''));
-}
-
-function splitTableCells(line: string): string[] {
-  const trimmed = line.trim();
-  if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) {
-    return [];
-  }
-  return trimmed
-    .slice(1, -1)
-    .split('|')
-    .map((cell) => cell.trim());
-}
-
-function tableRowToText(line: string): string {
-  const cells = splitTableCells(line);
-  if (cells.length === 2) {
-    return `${cells[0]}：${cells[1]}`;
-  }
-  return cells.join(' / ');
 }
 
 function parseInlineTags(line: string): FeishuPostTag[] {
