@@ -1,21 +1,25 @@
 import { describe, expect, test } from 'bun:test';
 import { sendMessageFeishu, type FeishuMessageClient } from './outbound.js';
 
-describe('sendMessageFeishu', () => {
-  test('sends rich text post content to the target chat', async () => {
-    const createCalls: unknown[] = [];
-    const client: FeishuMessageClient = {
-      im: {
-        v1: {
-          message: {
-            create: async (payload: unknown) => {
-              createCalls.push(payload);
-              return {};
-            },
+function createMockClient(createCalls: unknown[]): FeishuMessageClient {
+  return {
+    im: {
+      v1: {
+        message: {
+          create: async (payload: unknown) => {
+            createCalls.push(payload);
+            return {};
           },
         },
       },
-    };
+    },
+  };
+}
+
+describe('sendMessageFeishu', () => {
+  test('sends rich text post content when the answer has no table', async () => {
+    const createCalls: unknown[] = [];
+    const client = createMockClient(createCalls);
 
     await sendMessageFeishu({
       appId: 'cli_test',
@@ -44,20 +48,83 @@ describe('sendMessageFeishu', () => {
     });
   });
 
-  test('does not include credentials in serialized message content', async () => {
-    const createCalls: Array<{ data: { content: string } }> = [];
+  test('sends interactive card content when the answer has a markdown table', async () => {
+    const createCalls: Array<{ data: { msg_type: string; content: string } }> = [];
+    const client = createMockClient(createCalls) as FeishuMessageClient;
+
+    await sendMessageFeishu({
+      appId: 'cli_test',
+      appSecret: 'secret_test',
+      chatId: 'oc_chat',
+      body: [
+        '## 股价概览',
+        '| 指标 | 数据 |',
+        '|---|---|',
+        '| 最新收盘 | 374.51 元 |',
+      ].join('\n'),
+    }, client);
+
+    expect(createCalls).toHaveLength(1);
+    expect(createCalls[0].data.msg_type).toBe('interactive');
+    const card = JSON.parse(createCalls[0].data.content);
+    expect(card.elements).toContainEqual({
+      tag: 'column_set',
+      flex_mode: 'none',
+      background_style: 'grey',
+      columns: [
+        {
+          tag: 'column',
+          width: 'weighted',
+          weight: 1,
+          elements: [{ tag: 'div', text: { tag: 'lark_md', content: '**指标**' } }],
+        },
+        {
+          tag: 'column',
+          width: 'weighted',
+          weight: 1,
+          elements: [{ tag: 'div', text: { tag: 'lark_md', content: '**数据**' } }],
+        },
+      ],
+    });
+  });
+
+  test('falls back to post content if interactive card send fails', async () => {
+    const createCalls: Array<{ data: { msg_type: string; content: string } }> = [];
     const client: FeishuMessageClient = {
       im: {
         v1: {
           message: {
             create: async (payload) => {
               createCalls.push(payload);
+              if (createCalls.length === 1) {
+                throw new Error('interactive card rejected');
+              }
               return {};
             },
           },
         },
       },
     };
+
+    await sendMessageFeishu({
+      appId: 'cli_test',
+      appSecret: 'secret_test',
+      chatId: 'oc_chat',
+      body: [
+        '| 指标 | 数据 |',
+        '|---|---|',
+        '| 最新收盘 | 374.51 元 |',
+      ].join('\n'),
+    }, client);
+
+    expect(createCalls).toHaveLength(2);
+    expect(createCalls[0].data.msg_type).toBe('interactive');
+    expect(createCalls[1].data.msg_type).toBe('post');
+  });
+
+  test('does not include credentials in serialized message content', async () => {
+    const createCalls: Array<{ data: { content: string } }> = [];
+    const client = createMockClient(createCalls) as FeishuMessageClient;
 
     await sendMessageFeishu({
       appId: 'cli_test',

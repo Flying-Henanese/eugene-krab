@@ -1,4 +1,5 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
+import { formatFeishuTableCard } from './card-format.js';
 import { formatFeishuPostContent } from './post-format.js';
 
 export type SendMessageFeishuParams = {
@@ -8,14 +9,21 @@ export type SendMessageFeishuParams = {
   body: string;
 };
 
+type FeishuMessagePayload =
+  | {
+      params: { receive_id_type: 'chat_id' };
+      data: { receive_id: string; msg_type: 'post'; content: string };
+    }
+  | {
+      params: { receive_id_type: 'chat_id' };
+      data: { receive_id: string; msg_type: 'interactive'; content: string };
+    };
+
 export type FeishuMessageClient = {
   im: {
     v1: {
       message: {
-        create(payload: {
-          params: { receive_id_type: 'chat_id' };
-          data: { receive_id: string; msg_type: 'post'; content: string };
-        }): Promise<unknown>;
+        create(payload: FeishuMessagePayload): Promise<unknown>;
       };
     };
   };
@@ -32,6 +40,25 @@ export async function sendMessageFeishu(
   params: SendMessageFeishuParams,
   client: FeishuMessageClient = createFeishuClient(params),
 ): Promise<void> {
+  const tableCard = formatFeishuTableCard(params.body);
+  if (tableCard) {
+    try {
+      await client.im.v1.message.create({
+        params: {
+          receive_id_type: 'chat_id',
+        },
+        data: {
+          receive_id: params.chatId,
+          msg_type: 'interactive',
+          content: JSON.stringify(tableCard),
+        },
+      });
+      return;
+    } catch {
+      // Fall through to the post path so the user still receives the answer.
+    }
+  }
+
   await client.im.v1.message.create({
     params: {
       receive_id_type: 'chat_id',
