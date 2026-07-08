@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { resolveSubagentModel, resolveSubagentReasoningEffort } from './spawn-subagent.js';
+import { resolveSubagentTools } from './types.js';
 
 const originalSubagentModel = process.env.SUBAGENT_MODEL;
 const originalAnalysisModel = process.env.SUBAGENT_ANALYSIS_MODEL;
@@ -65,5 +66,17 @@ describe('resolveSubagentReasoningEffort', () => {
     delete process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
 
     expect(resolveSubagentReasoningEffort()).toBe('medium');
+  });
+});
+
+describe('resolveSubagentTools', () => {
+  test('allows A-share structured data and web context tools for delegated analysis', () => {
+    expect(resolveSubagentTools('general-purpose')).toContain('a_share_analysis');
+    expect(resolveSubagentTools('general-purpose')).toContain('market_sentiment_analysis');
+
+    const analysisTools = resolveSubagentTools('analysis');
+    expect(analysisTools).toContain('a_share_analysis');
+    expect(analysisTools).toContain('market_sentiment_analysis');
+    expect(analysisTools).toContain('web_search');
   });
 });
