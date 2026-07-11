@@ -20,6 +20,10 @@ import {
   createMarketSentimentAnalysis,
   MARKET_SENTIMENT_DESCRIPTION,
 } from './finance/tushare/index.js';
+import {
+  createTechnicalAnalysis,
+  TECHNICAL_ANALYSIS_DESCRIPTION,
+} from './finance/technical-analysis/index.js';
 import { heartbeatTool, HEARTBEAT_TOOL_DESCRIPTION } from './heartbeat/heartbeat-tool.js';
 import { cronTool, CRON_TOOL_DESCRIPTION } from './cron/cron-tool.js';
 import { memoryGetTool, MEMORY_GET_DESCRIPTION, memorySearchTool, MEMORY_SEARCH_DESCRIPTION, memoryUpdateTool, MEMORY_UPDATE_DESCRIPTION } from './memory/index.js';
@@ -201,6 +205,13 @@ export function getToolRegistry(model: string): RegisteredTool[] {
   }
 
   if (process.env.TUSHARE_TOKEN) {
+    tools.push({
+      name: 'technical_analysis',
+      tool: createTechnicalAnalysis(),
+      description: TECHNICAL_ANALYSIS_DESCRIPTION,
+      compactDescription: 'Daily/weekly technical analysis for one China A-share or supported China index via Tushare plus local MA/BOLL/KDJ, trend, volatility, drawdown, and recent formula signals. Not for fundamentals, news, minute data, or trade execution.',
+      concurrencySafe: true,
+    });
     tools.push({
       name: 'a_share_analysis',
       tool: createAShareAnalysis(),

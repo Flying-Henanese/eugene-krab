@@ -34,6 +34,19 @@ describe('Tushare tool registration', () => {
     expect(getToolRegistry('gpt-5.5').some((tool) => tool.name === 'market_sentiment_analysis')).toBe(true);
   });
 
+  test('registers technical_analysis only with TUSHARE_TOKEN and exposes China technical triggers', () => {
+    delete process.env.TUSHARE_TOKEN;
+    expect(getToolRegistry('gpt-5.5').some((tool) => tool.name === 'technical_analysis')).toBe(false);
+
+    process.env.TUSHARE_TOKEN = 'test-token';
+    const tool = getToolRegistry('gpt-5.5').find((item) => item.name === 'technical_analysis');
+    expect(tool).toBeDefined();
+    expect(tool?.description).toContain('技术面分析');
+    expect(tool?.description).toContain('China stock index');
+    expect(tool?.compactDescription).toContain('MA/BOLL/KDJ');
+    expect(tool?.concurrencySafe).toBe(true);
+  });
+
   test('keeps Tavily web_search registration independent from Tushare', () => {
     delete process.env.TUSHARE_TOKEN;
     process.env.TAVILY_API_KEY = 'test-tavily-key';

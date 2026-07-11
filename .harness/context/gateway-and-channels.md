@@ -28,6 +28,7 @@ Current Feishu behavior:
 - Deduplicates message IDs with a TTL.
 - Sends outbound answers through Feishu-specific outbound formatting.
 - Can optionally send an updateable “processing” card before an agent run and replace it with the final answer. This is disabled by default under `channels.feishu.processingCard` so deployments without the Feishu update-message permission retain the existing behavior.
+- Final card answers are paginated at a 28 KB safety budget and 80 elements per card. The first page replaces the processing card and later pages are sent as numbered continuation cards; without a processing card, long prose and table answers use the same multi-card path while ordinary short prose remains a rich-text post.
 - Falls back to the existing standalone outbound path when processing-card creation or final update fails; empty answers and agent failures are best-effort updates to a terminal card state.
 
 The current scope still excludes group chats, webhooks, images, per-tool progress updates, and project-local allowlists.

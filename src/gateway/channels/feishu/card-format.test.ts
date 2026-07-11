@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatFeishuAnswerCard, formatFeishuTableCard } from './card-format.js';
+import { formatFeishuAnswerCard, formatFeishuAnswerCards, formatFeishuTableCard, formatFeishuTableCards } from './card-format.js';
 
 describe('formatFeishuTableCard', () => {
   test('returns null when the body has no markdown table', () => {
@@ -111,13 +111,25 @@ describe('formatFeishuTableCard', () => {
     ]);
   });
 
-  test('keeps serialized cards below the safe size limit', () => {
-    const card = formatFeishuAnswerCard('很长的回答'.repeat(20_000));
-    expect(new TextEncoder().encode(JSON.stringify(card)).byteLength).toBeLessThanOrEqual(28 * 1024);
-    expect(card.elements.at(-1)).toEqual({
-      tag: 'div',
-      text: { tag: 'lark_md', content: '内容较长，已省略部分内容。' },
-    });
+  test('splits long prose into numbered cards without omitting content', () => {
+    const body = '很长的回答。'.repeat(20_000);
+    const cards = formatFeishuAnswerCards(body);
+    expect(cards.length).toBeGreaterThan(1);
+    expect(cards.every(card => new TextEncoder().encode(JSON.stringify(card)).byteLength <= 28 * 1024)).toBe(true);
+    expect(cards[0].header.title.content).toBe(`Eugene Krab · 1/${cards.length}`);
+    const reconstructed = cards.flatMap(card => card.elements)
+      .filter((element): element is { tag: 'div'; text: { content: string; tag: 'lark_md' } } => element.tag === 'div')
+      .map(element => element.text.content)
+      .join('');
+    expect(reconstructed).toBe(body);
+  });
+
+  test('paginates table rows instead of dropping rows after the element limit', () => {
+    const rows = Array.from({ length: 170 }, (_, index) => `| row-${index} | ${index} |`);
+    const cards = formatFeishuTableCards(['| 指标 | 数值 |', '|---|---|', ...rows].join('\n'))!;
+    expect(cards.length).toBeGreaterThan(1);
+    const renderedRows = cards.flatMap(card => card.elements).filter(element => element.tag === 'column_set');
+    expect(renderedRows).toHaveLength(171);
   });
 
   test('limits wide tables to four columns and appends a notice', () => {

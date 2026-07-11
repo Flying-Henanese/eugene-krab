@@ -16,7 +16,7 @@ This directory is the repo-local operating manual for Codex and other coding age
 - Bun commands, environment variables, and local state: `context/runtime-and-config.md`
 - Agent tools, skills, subagents, and tool registry behavior: `context/tools-skills-and-subagents.md`
 - Feishu, WhatsApp, gateway routing, and chat channels: `context/gateway-and-channels.md`
-- Financial data source selection, A-share support, and web-search pairing: `context/market-data-sources.md`
+- Financial data source selection, A-share support, market sentiment, technical analysis, and web-search pairing: `context/market-data-sources.md`
 - Before code changes: `checklists/code-change.md`
 - Before claiming done: `checklists/verification.md`
 - Credentials, file tools, gateway access, and data handling: `checklists/security.md`

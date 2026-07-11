@@ -8,6 +8,7 @@ Read this before changing financial research tools, A-share support, search-prov
 - SEC filings: `read_filings` tool.
 - China A-share single-stock structured data: Tushare-backed `a_share_analysis`, enabled only when `TUSHARE_TOKEN` is set.
 - China A-share broad market sentiment: Tushare-backed `market_sentiment_analysis`, enabled only when `TUSHARE_TOKEN` is set.
+- China A-share and supported China-index technical analysis: `technical_analysis`, enabled only when `TUSHARE_TOKEN` is set.
 - Current market context and news: `web_search`, using Exa, Perplexity, Tavily, or LangSearch based on configured API keys and preference.
 - X/Twitter sentiment: `x_search`, enabled only when `X_BEARER_TOKEN` is set.
 
@@ -18,6 +19,24 @@ This file is the current working context for A-share analysis. Consult `docs/sup
 Use Tushare for structured A-share snapshots such as ticker resolution, PE/PB, ROE, revenue, profit, and cash-flow data. Pair it with `web_search` for current Chinese market context when the question asks for recent narrative, policy, sentiment, or news.
 
 Do not route US/global equity data through Tushare. Keep Financial Datasets as the default for non-A-share structured finance data.
+
+## Technical Analysis Guidance
+
+Use `technical_analysis` for one A-share or supported China index when the request asks about daily/weekly trend, price volatility, moving averages, BOLL, KDJ, drawdown, or recent formula signals.
+
+- Stock name/code resolution uses Tushare `stock_basic`. The current resolver caches the listing per `TushareClient`, but `createTechnicalAnalysis()` creates a new HTTP client for each tool invocation, so this cache does not currently persist across separate user requests. An explicit ticker still attempts the lookup for name enrichment but falls back to the normalized code if the lookup is unavailable.
+- Stocks use Tushare `daily + adj_factor` by default; qfq OHLC is calculated locally with the latest factor in the requested window as the anchor. With `adjustment=none`, the tool skips `adj_factor` and uses unadjusted `daily` prices.
+- Indices use Tushare `index_daily` and do not use adjustment factors. Built-in aliases cover 上证指数/上证综指、深证成指、创业板指、沪深300、中证500、科创50; an explicit index code is also accepted when `asset_type=index`.
+- Weekly candles, MA5/10/20/30/60, BOLL(20,2), KDJ(9,3,3), returns, realized volatility, drawdown, and raw signals are calculated locally in pure TypeScript.
+- A successful analysis requires at least 120 usable daily candles and 20 locally aggregated weekly candles. The default request uses a 450-calendar-day lookback and supports 120-1000 days.
+- The latest active weekly candle may be included but must be marked partial.
+- `technical_analysis` is the single deterministic core used by direct main-agent calls, the `technical-analysis` skill, and the `technical-analysis` subagent.
+
+Use the dedicated subagent mainly as one isolated lane of a broader fundamental/news/technical report. Narrow technical requests should call the tool directly. The subagent uses the normal fast-model policy; it explains deterministic tool output rather than recalculating indicators.
+
+Do not use this capability for intraday data, real-time execution, US/global equities, fundamental valuation, or news causality. Exact chart-platform parity must not be claimed until a golden fixture settles standard-deviation, KDJ initialization, `FILTER`, and `EXIST` boundary semantics.
+
+Tushare endpoint access and rate limits belong to the configured token, not to the local calculations. The runtime handles permission/error details through `unavailable_data`; do not infer an exact per-minute quota from one or two successful calls. The external Tushare MCP used during development is not part of Eugene Krab's runtime path.
 
 ## China Market Sentiment Guidance
 

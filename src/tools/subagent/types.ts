@@ -38,6 +38,7 @@ const READ_ONLY_TOOLS = [
   'stock_screener',
   'a_share_analysis',
   'market_sentiment_analysis',
+  'technical_analysis',
   'web_search',
   'x_search',
   'web_fetch',
@@ -77,10 +78,23 @@ export const SUBAGENT_TYPES: Record<string, SubagentTypeConfig> = {
       'read_filings',
       'a_share_analysis',
       'market_sentiment_analysis',
+      'technical_analysis',
       'web_search',
       'web_fetch',
     ],
     maxIterations: 8,
+  },
+  'technical-analysis': {
+    whenToUse: 'Isolated technical analysis of one China A-share or supported China index, especially as one lane of a broader company report.',
+    systemPrompt: `${WORKER_PREAMBLE}\n\nYou are a technical-analysis worker. Start with technical_analysis and explain only the returned deterministic evidence. State the data date, adjustment mode, and partial-week status. Use a_share_analysis only for requested fundamentals, market_sentiment_analysis only for broad market context, and web_search only for explicitly requested recent-event context. Distinguish raw formula signals from actual positions and avoid personalized trading instructions.`,
+    tools: [
+      'technical_analysis',
+      'a_share_analysis',
+      'market_sentiment_analysis',
+      'web_search',
+      'web_fetch',
+    ],
+    maxIterations: 6,
   },
 };
 

@@ -1,5 +1,5 @@
 import * as Lark from '@larksuiteoapi/node-sdk';
-import { formatFeishuTableCard } from './card-format.js';
+import { formatFeishuAnswerCards, formatFeishuTableCards } from './card-format.js';
 import { formatFeishuPostContent } from './post-format.js';
 
 export type SendMessageFeishuParams = {
@@ -51,21 +51,27 @@ export async function sendMessageFeishu(
   params: SendMessageFeishuParams,
   client: FeishuMessageClient = createFeishuClient(params),
 ): Promise<void> {
-  const tableCard = formatFeishuTableCard(params.body);
-  if (tableCard) {
+  const tableCards = formatFeishuTableCards(params.body);
+  const answerCards = tableCards ?? formatFeishuAnswerCards(params.body);
+  if (tableCards || answerCards.length > 1) {
+    let sentCards = 0;
     try {
-      await client.im.v1.message.create({
-        params: {
-          receive_id_type: 'chat_id',
-        },
-        data: {
-          receive_id: params.chatId,
-          msg_type: 'interactive',
-          content: JSON.stringify(tableCard),
-        },
-      });
+      for (const card of answerCards) {
+        await client.im.v1.message.create({
+          params: {
+            receive_id_type: 'chat_id',
+          },
+          data: {
+            receive_id: params.chatId,
+            msg_type: 'interactive',
+            content: JSON.stringify(card),
+          },
+        });
+        sentCards += 1;
+      }
       return;
-    } catch {
+    } catch (error) {
+      if (sentCards > 0) throw error;
       // Fall through to the post path so the user still receives the answer.
     }
   }

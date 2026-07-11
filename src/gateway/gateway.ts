@@ -335,6 +335,7 @@ export async function handleFeishuInbound(
             appId: account.appId,
             appSecret: account.appSecret,
             messageId: processingMessageId,
+            chatId: inbound.chatId,
             body: answer.trim(),
           });
           console.log(`Updated Feishu reply card (${answer.length} chars, ${durationMs}ms)`);

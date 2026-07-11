@@ -2,6 +2,8 @@ export type TushareApiName =
   | 'stock_basic'
   | 'daily_basic'
   | 'daily'
+  | 'adj_factor'
+  | 'weekly'
   | 'income'
   | 'balancesheet'
   | 'cashflow'

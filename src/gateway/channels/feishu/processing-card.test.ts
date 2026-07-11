@@ -85,6 +85,7 @@ describe('Feishu processing cards', () => {
       appId: 'cli_test',
       appSecret: 'secret_test',
       messageId: 'om_processing',
+      chatId: 'oc_chat',
       body: '| 指标 | 数值 |\n|---|---|\n| PE | 22.5 |',
     }, createMockClient({ patchCalls }));
 
@@ -99,7 +100,27 @@ describe('Feishu processing cards', () => {
       appId: 'cli_test',
       appSecret: 'secret_test',
       messageId: 'om_processing',
+      chatId: 'oc_chat',
       body: 'answer',
     }, createMockClient({ patchResponse: { code: 321 } }))).rejects.toThrow('code 321');
+  });
+
+  test('patches the first page and creates continuation cards for long answers', async () => {
+    const createCalls: Array<{ data: { receive_id: string; msg_type: string; content: string } }> = [];
+    const patchCalls: Array<{ data: { content: string } }> = [];
+    await updateFeishuProcessingCard({
+      appId: 'cli_test',
+      appSecret: 'secret_test',
+      messageId: 'om_processing',
+      chatId: 'oc_chat',
+      body: '很长的回答。'.repeat(20_000),
+    }, createMockClient({ createCalls, patchCalls }));
+
+    expect(patchCalls).toHaveLength(1);
+    expect(createCalls.length).toBeGreaterThan(0);
+    expect(createCalls.every(call => call.data.receive_id === 'oc_chat' && call.data.msg_type === 'interactive')).toBe(true);
+    const cards = [JSON.parse(patchCalls[0].data.content), ...createCalls.map(call => JSON.parse(call.data.content))];
+    expect(cards[0].header.title.content).toBe(`Eugene Krab · 1/${cards.length}`);
+    expect(cards.at(-1).header.title.content).toBe(`Eugene Krab · ${cards.length}/${cards.length}`);
   });
 });

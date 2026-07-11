@@ -4,7 +4,7 @@ Read this when orienting on the repo, answering "what is this project?", or choo
 
 ## Identity
 
-Eugene Krab is a fork of Dexter, a Bun/TypeScript CLI agent for financial research. This fork keeps the original autonomous research loop and adds chat-gateway workflows, Feishu support, model policy controls, persistent memory tools, cron/heartbeat tools, and China A-share analysis support.
+Eugene Krab is a fork of Dexter, a Bun/TypeScript CLI agent for financial research. This fork keeps the original autonomous research loop and adds chat-gateway workflows, Feishu support, model policy controls, persistent memory tools, cron/heartbeat tools, and China A-share fundamental, market-sentiment, and technical-analysis support.
 
 ## Main Entrypoints
 
@@ -25,6 +25,8 @@ The project supports two main usage modes:
 - Headless chat operation through the gateway, currently with WhatsApp and Feishu channel plugins.
 
 The agent can call finance tools, web/search/browser tools, filesystem tools, memory tools, cron/heartbeat tools, built-in skills, and isolated subagents. Gateway channels should not assume CLI-only tools such as interactive question prompts are available.
+
+China technical analysis is exposed through three prompt-level surfaces over one deterministic core: direct `technical_analysis` tool calls, the `technical-analysis` skill workflow, and a dedicated `technical-analysis` subagent for one lane of a broader report. Tool and subagent selection is performed by the main model from prompt-visible descriptions; the gateway does not contain a keyword router for technical-analysis phrases.
 
 ## Historical Design References
 

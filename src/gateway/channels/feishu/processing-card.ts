@@ -5,6 +5,7 @@ import {
 } from './outbound.js';
 import {
   formatFeishuAnswerCard,
+  formatFeishuAnswerCards,
   formatFeishuTextCard,
   type FeishuInteractiveCard,
 } from './card-format.js';
@@ -27,7 +28,12 @@ export type CreateFeishuProcessingCardParams = FeishuCredentials & {
 
 export type UpdateFeishuProcessingCardParams = FeishuCredentials & {
   messageId: string;
+  chatId: string;
   body: string;
+};
+
+type PatchFeishuProcessingCardParams = FeishuCredentials & {
+  messageId: string;
 };
 
 export function formatFeishuProcessingCard(text: string): FeishuInteractiveCard {
@@ -67,25 +73,37 @@ export async function updateFeishuProcessingCard(
   params: UpdateFeishuProcessingCardParams,
   client: FeishuProcessingCardClient = createProcessingClient(params),
 ): Promise<void> {
-  await patchCard(params, formatFeishuFinalCard(params.body), client);
+  const cards = formatFeishuAnswerCards(params.body);
+  await patchCard(params, cards[0], client);
+  for (const card of cards.slice(1)) {
+    const response = await client.im.v1.message.create({
+      params: { receive_id_type: 'chat_id' },
+      data: {
+        receive_id: params.chatId,
+        msg_type: 'interactive',
+        content: JSON.stringify(card),
+      },
+    });
+    assertSuccessfulResponse(response, 'create');
+  }
 }
 
 export async function updateFeishuProcessingCardToError(
-  params: Omit<UpdateFeishuProcessingCardParams, 'body'>,
+  params: PatchFeishuProcessingCardParams,
   client: FeishuProcessingCardClient = createProcessingClient(params),
 ): Promise<void> {
   await patchCard(params, formatFeishuErrorCard(FEISHU_PROCESSING_ERROR_TEXT), client);
 }
 
 export async function updateFeishuProcessingCardToEmpty(
-  params: Omit<UpdateFeishuProcessingCardParams, 'body'>,
+  params: PatchFeishuProcessingCardParams,
   client: FeishuProcessingCardClient = createProcessingClient(params),
 ): Promise<void> {
   await patchCard(params, formatFeishuErrorCard(FEISHU_PROCESSING_EMPTY_TEXT), client);
 }
 
 async function patchCard(
-  params: Omit<UpdateFeishuProcessingCardParams, 'body'>,
+  params: PatchFeishuProcessingCardParams,
   card: FeishuInteractiveCard,
   client: FeishuProcessingCardClient,
 ): Promise<void> {

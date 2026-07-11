@@ -25,6 +25,7 @@ Explain Dexter as an AI financial research assistant that the user primarily tal
    - SEC filing reading: summarize or extract key sections from 10-K, 10-Q, and 8-K filings.
    - Stock screening: find companies that match valuation, growth, quality, or risk criteria.
    - A-share single-stock analysis: analyze Chinese A-share companies such as 贵州茅台 or 宁德时代 when Tushare is configured.
+   - A-share and China-index technical analysis: explain daily/weekly trend, volatility, MA, BOLL, KDJ, and recent formula signals from historical prices.
    - China A-share market sentiment: analyze the whole A-share market using index moves, market breadth, limit-up/down pressure, sector heat, money-flow data when available, and optional news context.
    - News and web context: search current web/news sources and read URLs.
    - X/Twitter sentiment: summarize social discussion when X access is configured.
@@ -52,6 +53,7 @@ Explain Dexter as an AI financial research assistant that the user primarily tal
    - Comparison: "Compare AAPL, MSFT, and NVDA on financial quality, valuation, and growth prospects."
    - DCF: "Run a DCF valuation for AAPL and show the sensitivity table."
    - A-share: "分析贵州茅台的估值、盈利质量、近期市场背景和主要风险。"
+   - Technical analysis: "技术面分析贵州茅台最近的均线、布林带、KDJ 和价格波动。"
    - China market sentiment: "请分析 20260703 A 股整体市场情绪，重点看市场宽度、涨跌停、行业热度、资金流，并结合新闻解释。"
    - X sentiment: "Check X/Twitter sentiment on TSLA over the last 7 days."
    - Memo: "Write a long investment memo for ASML with a 12-month horizon."

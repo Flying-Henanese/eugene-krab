@@ -49,109 +49,90 @@ const MAX_COLUMNS = 4;
 const MAX_CELL_LENGTH = 60;
 const MAX_ELEMENTS = 80;
 const MAX_CARD_BYTES = 28 * 1024;
-const OMITTED_CONTENT_NOTICE = '内容较长，已省略部分内容。';
+const PAGE_NUMBER_RESERVE_BYTES = 128;
 
 export function formatFeishuTableCard(body: string): FeishuInteractiveCard | null {
+  return formatFeishuTableCards(body)?.[0] ?? null;
+}
+
+export function formatFeishuTableCards(body: string): FeishuInteractiveCard[] | null {
   const segments = parseMarkdownTables(body);
   if (!segments.some(segment => segment.type === 'table')) {
     return null;
   }
 
   const elements: FeishuCardElement[] = [];
-  let omittedRows = false;
   let renderedTable = false;
 
   for (const segment of segments) {
-    if (elements.length >= MAX_ELEMENTS) {
-      omittedRows = true;
-      break;
-    }
-
     if (segment.type === 'text') {
       pushTextSegment(elements, segment);
       continue;
     }
 
-    if (renderedTable && elements.length < MAX_ELEMENTS) {
+    if (renderedTable) {
       elements.push({ tag: 'hr' });
     }
 
     const tableElements = tableToElements(segment.header, segment.rows);
-    for (const element of tableElements) {
-      if (elements.length >= MAX_ELEMENTS) {
-        omittedRows = true;
-        break;
-      }
-      elements.push(element);
-    }
+    elements.push(...tableElements);
     renderedTable = true;
   }
 
-  return finalizeCard(elements.length > 0 ? elements : [markdownDiv('无可展示内容。')], omittedRows);
+  return paginateElements(elements.length > 0 ? elements : [markdownDiv('无可展示内容。')]);
 }
 
 export function formatFeishuAnswerCard(body: string): FeishuInteractiveCard {
-  const tableCard = formatFeishuTableCard(body);
-  if (tableCard) {
-    return tableCard;
-  }
+  return formatFeishuAnswerCards(body)[0];
+}
+
+export function formatFeishuAnswerCards(body: string): FeishuInteractiveCard[] {
+  const tableCards = formatFeishuTableCards(body);
+  if (tableCards) return tableCards;
 
   const content = body
     .split('\n')
     .map(convertMarkdownLine)
     .join('\n')
     .trim() || '无可展示内容。';
-  return finalizeCard([markdownDiv(content)]);
+  return paginateElements([markdownDiv(content)]);
 }
 
 export function formatFeishuTextCard(text: string): FeishuInteractiveCard {
-  return finalizeCard([markdownDiv(text.trim() || '无可展示内容。')]);
+  return paginateElements([markdownDiv(text.trim() || '无可展示内容。')])[0];
 }
 
-function finalizeCard(
-  sourceElements: FeishuCardElement[],
-  contentWasOmitted = false,
-): FeishuInteractiveCard {
-  const elements = [...sourceElements];
-  let omitted = contentWasOmitted;
-  let card = buildCard(elements);
+function paginateElements(sourceElements: FeishuCardElement[]): FeishuInteractiveCard[] {
+  const safeElements = sourceElements.flatMap(splitOversizedElement);
+  const pages: FeishuCardElement[][] = [];
+  let current: FeishuCardElement[] = [];
 
-  while (serializedBytes(card) > MAX_CARD_BYTES && elements.length > 1) {
-    elements.pop();
-    omitted = true;
-    card = buildCard(elements);
-  }
-
-  if (serializedBytes(card) > MAX_CARD_BYTES) {
-    const onlyElement = elements[0];
-    if (onlyElement?.tag === 'div') {
-      onlyElement.text.content = truncateToCardSize(onlyElement.text.content);
-      omitted = true;
-      card = buildCard(elements);
-    }
-  }
-
-  if (omitted) {
-    const notice = markdownDiv(OMITTED_CONTENT_NOTICE);
-    while (
-      elements.length > 0 &&
-      serializedBytes(buildCard([...elements, notice])) > MAX_CARD_BYTES
+  for (const element of safeElements) {
+    const candidate = [...current, element];
+    if (
+      current.length > 0 &&
+      (candidate.length > MAX_ELEMENTS || serializedBytes(buildCard(candidate)) > MAX_CARD_BYTES - PAGE_NUMBER_RESERVE_BYTES)
     ) {
-      elements.pop();
+      pages.push(current);
+      current = [element];
+    } else {
+      current = candidate;
     }
-    elements.push(notice);
   }
+  if (current.length > 0) pages.push(current);
 
-  return buildCard(elements.length > 0 ? elements : [markdownDiv(OMITTED_CONTENT_NOTICE)]);
+  const total = Math.max(1, pages.length);
+  return (pages.length > 0 ? pages : [[markdownDiv('无可展示内容。')]])
+    .map((elements, index) => buildCard(elements, total > 1 ? `${CARD_TITLE} · ${index + 1}/${total}` : CARD_TITLE));
 }
 
-function buildCard(elements: FeishuCardElement[]): FeishuInteractiveCard {
+function buildCard(elements: FeishuCardElement[], title = CARD_TITLE): FeishuInteractiveCard {
   return {
     config: { wide_screen_mode: true, update_multi: true },
     header: {
       title: {
         tag: 'plain_text',
-        content: CARD_TITLE,
+        content: title,
       },
     },
     elements,
@@ -162,22 +143,46 @@ function serializedBytes(card: FeishuInteractiveCard): number {
   return new TextEncoder().encode(JSON.stringify(card)).byteLength;
 }
 
-function truncateToCardSize(content: string): string {
+function splitOversizedElement(element: FeishuCardElement): FeishuCardElement[] {
+  if (element.tag !== 'div' || serializedBytes(buildCard([element])) <= MAX_CARD_BYTES - PAGE_NUMBER_RESERVE_BYTES) {
+    return [element];
+  }
+
+  const parts: FeishuCardElement[] = [];
+  let remaining = element.text.content;
+  while (remaining.length > 0) {
+    const prefixLength = fittingPrefixLength(remaining, element.text.tag);
+    const splitAt = preferredBreak(remaining, prefixLength);
+    parts.push({ tag: 'div', text: { ...element.text, content: remaining.slice(0, splitAt) } });
+    remaining = remaining.slice(splitAt);
+  }
+  return parts;
+}
+
+function fittingPrefixLength(content: string, tag: FeishuCardText['tag']): number {
   let low = 0;
   let high = content.length;
   while (low < high) {
     const midpoint = Math.ceil((low + high) / 2);
-    const candidate = buildCard([
-      markdownDiv(content.slice(0, midpoint)),
-      markdownDiv(OMITTED_CONTENT_NOTICE),
-    ]);
-    if (serializedBytes(candidate) <= MAX_CARD_BYTES) {
+    const candidate = buildCard([{ tag: 'div', text: { tag, content: content.slice(0, midpoint) } }]);
+    if (serializedBytes(candidate) <= MAX_CARD_BYTES - PAGE_NUMBER_RESERVE_BYTES) {
       low = midpoint;
     } else {
       high = midpoint - 1;
     }
   }
-  return content.slice(0, low);
+  return Math.max(1, low);
+}
+
+function preferredBreak(content: string, limit: number): number {
+  if (limit >= content.length) return content.length;
+  const minimum = Math.floor(limit * 0.6);
+  const prefix = content.slice(0, limit);
+  for (const separator of ['\n', '。', '；', '！', '？', '. ', '; ', ' ']) {
+    const index = prefix.lastIndexOf(separator);
+    if (index >= minimum) return index + separator.length;
+  }
+  return limit;
 }
 
 function pushTextSegment(elements: FeishuCardElement[], segment: Extract<FeishuMarkdownSegment, { type: 'text' }>): void {

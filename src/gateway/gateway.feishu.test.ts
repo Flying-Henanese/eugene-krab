@@ -96,6 +96,14 @@ describe('Feishu processing card lifecycle', () => {
     expect(sent).toBe(1);
   });
 
+  test('passes the chat id when updating a processing card so continuations can be sent', async () => {
+    let updateChatId = '';
+    await handleFeishuInbound(cfg, inbound, createDependencies({
+      updateProcessingCard: async params => { updateChatId = params.chatId; },
+    }));
+    expect(updateChatId).toBe('oc_chat');
+  });
+
   test('terminates the card for empty answers and agent failures', async () => {
     let emptyUpdates = 0;
     await handleFeishuInbound(cfg, inbound, createDependencies({

@@ -138,4 +138,18 @@ describe('sendMessageFeishu', () => {
     expect(createCalls[0].data.content).not.toContain('cli_test');
     expect(createCalls[0].data.content).not.toContain('secret_test');
   });
+
+  test('sends long prose as multiple interactive cards', async () => {
+    const createCalls: Array<{ data: { msg_type: string; content: string } }> = [];
+    await sendMessageFeishu({
+      appId: 'cli_test',
+      appSecret: 'secret_test',
+      chatId: 'oc_chat',
+      body: '很长的回答。'.repeat(20_000),
+    }, createMockClient(createCalls));
+
+    expect(createCalls.length).toBeGreaterThan(1);
+    expect(createCalls.every(call => call.data.msg_type === 'interactive')).toBe(true);
+    expect(createCalls.every(call => new TextEncoder().encode(call.data.content).byteLength <= 28 * 1024)).toBe(true);
+  });
 });

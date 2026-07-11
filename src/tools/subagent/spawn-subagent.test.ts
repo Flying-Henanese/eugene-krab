@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { resolveSubagentModel, resolveSubagentReasoningEffort } from './spawn-subagent.js';
-import { resolveSubagentTools } from './types.js';
+import { resolveSubagentTools, SUBAGENT_TYPE_NAMES } from './types.js';
 
 const originalSubagentModel = process.env.SUBAGENT_MODEL;
 const originalAnalysisModel = process.env.SUBAGENT_ANALYSIS_MODEL;
@@ -43,6 +43,7 @@ describe('resolveSubagentModel', () => {
 
     expect(resolveSubagentModel('deepseek-v4-pro', 'analysis')).toBe('deepseek-v4-pro');
     expect(resolveSubagentModel('deepseek-v4-pro', 'research')).toBe('deepseek-v4-flash');
+    expect(resolveSubagentModel('deepseek-v4-pro', 'technical-analysis')).toBe('deepseek-v4-flash');
   });
 
   test('falls back to parent model when provider has no fast model', () => {
@@ -78,5 +79,12 @@ describe('resolveSubagentTools', () => {
     expect(analysisTools).toContain('a_share_analysis');
     expect(analysisTools).toContain('market_sentiment_analysis');
     expect(analysisTools).toContain('web_search');
+
+    expect(SUBAGENT_TYPE_NAMES).toContain('technical-analysis');
+    const technicalTools = resolveSubagentTools('technical-analysis');
+    expect(technicalTools).toContain('technical_analysis');
+    expect(technicalTools).not.toContain('spawn_subagent');
+    expect(technicalTools).not.toContain('ask_user_question');
+    expect(resolveSubagentTools('general-purpose')).toContain('technical_analysis');
   });
 });

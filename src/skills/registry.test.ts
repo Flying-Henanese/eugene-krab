@@ -18,4 +18,15 @@ describe('skill registry', () => {
     expect(loaded?.instructions).toContain('Explain Dexter as an AI financial research assistant');
     expect(loaded?.instructions).toContain('Default to Feishu chat usage');
   });
+
+  test('discovers and loads the China technical-analysis workflow', () => {
+    clearSkillCache();
+    const metadata = discoverSkills().find((skill) => skill.name === 'technical-analysis');
+    expect(metadata?.description).toContain('技术面分析');
+
+    const loaded = getSkill('technical-analysis');
+    expect(loaded?.instructions).toContain('technical_analysis');
+    expect(loaded?.instructions).toContain('latest data date');
+    expect(loaded?.instructions).toContain('partial');
+  });
 });

@@ -8,6 +8,7 @@ Read this when changing module boundaries, tracing request flow, or deciding whe
 - Agent runtime: `src/agent/` owns system prompt assembly, iterative model/tool loop, scratchpad, compaction, microcompaction, and event emission.
 - Model layer: `src/model/llm.ts` creates LangChain chat models for OpenAI-compatible, Anthropic, Google, Ollama, xAI, OpenRouter, Moonshot, and DeepSeek providers.
 - Tools: `src/tools/registry.ts` is the central registration point. Tool implementations live in subdirectories by capability.
+- China technical analysis: `src/tools/finance/technical-analysis/` owns Tushare collection/normalization plus pure TypeScript adjustment, weekly aggregation, indicators, signal evaluation, position-event interpretation, and summary logic. `src/skills/technical-analysis/SKILL.md` and the `technical-analysis` subagent reuse this tool rather than duplicating calculations.
 - Skills: `src/skills/` stores SKILL.md workflows exposed through the `skill` tool.
 - Gateway: `src/gateway/` adapts chat-channel messages into agent runs and sends responses back through channel plugins.
 - Memory: `src/memory/` manages persistent memory, indexing, retrieval, and session context.
@@ -33,6 +34,7 @@ Channel plugins should implement the shared channel interface and be registered 
 ## Boundary Rules
 
 - Add new tools through `src/tools/registry.ts` and keep descriptions accurate because they are prompt-visible.
+- Keep technical-analysis calculations in the deterministic finance module. Skills and subagents may orchestrate or explain its result, but must not independently recalculate indicators or implement a second Tushare path.
 - Keep channel-specific parsing, dedupe, and outbound formatting inside that channel directory.
 - Keep provider-specific LLM behavior in `src/model/llm.ts` or `src/providers.ts`.
 - Do not leak CLI-only assumptions into gateway/headless runs.
