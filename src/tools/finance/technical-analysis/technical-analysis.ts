@@ -6,11 +6,12 @@ import { calculateIndicators } from './indicators.js';
 import { interpretPositionEvents } from './position-state.js';
 import { collectTechnicalData } from './provider.js';
 import { evaluateDailySignals, evaluateWeeklySignals } from './signals.js';
+import { evaluateTrendRecoveryStrategy, TREND_RECOVERY_V1 } from './strategy.js';
 import { buildTechnicalSummary } from './summary.js';
 import type { TechnicalAnalysisResult, TechnicalSignal } from './types.js';
 
 export const TECHNICAL_ANALYSIS_DESCRIPTION = `
-Deterministic daily/weekly technical analysis for one China A-share or supported China stock index. Uses Tushare OHLC data and local TypeScript calculations for MA5/10/20/30/60, BOLL(20,2), KDJ(9,3,3), trend, volatility, drawdown, and recent formula signals.
+Deterministic daily/weekly technical analysis for one China A-share or supported China stock index. Uses Tushare OHLC data and local TypeScript calculations for MA5/10/20/30/60, BOLL(20,2), KDJ(9,3,3), trend, volatility, drawdown, raw formula signals, Baseline V0 events, and experimental Trend Recovery V1 position events.
 
 Use for Chinese requests about 技术面分析、近期走势、价格波动、波动率、均线、布林带、KDJ、超买超卖、买卖信号, including supported indices such as 上证指数、深证成指、创业板指、沪深300、中证500、科创50.
 
@@ -66,7 +67,8 @@ export async function runTechnicalAnalysis(
   const dailySignals = evaluateDailySignals(collected.daily, dailyIndicators.kdj, dailyIndicators.boll);
   const weeklySignals = evaluateWeeklySignals(collected.weekly, weeklyIndicators.boll);
   const allSignals = [...dailySignals, ...weeklySignals].sort((a, b) => a.date.localeCompare(b.date));
-  const positionEvents = interpretPositionEvents(dailySignals);
+  const baselinePositionEvents = interpretPositionEvents(dailySignals);
+  const positionEvents = evaluateTrendRecoveryStrategy(collected.daily, dailyIndicators);
   const summary = buildTechnicalSummary(collected.daily, dailyIndicators);
   const lastIndex = collected.daily.length - 1;
   const latestDaily = collected.daily[lastIndex];
@@ -88,6 +90,13 @@ export async function runTechnicalAnalysis(
       provider: 'Tushare', apis: collected.apis, adjustment: collected.adjustment,
       boll: { period: 20, multiplier: 2, stddev: 'sample' },
       kdj: { period: 9, smooth_k: 3, smooth_d: 3, initial: 50 },
+      strategy: {
+        name: TREND_RECOVERY_V1.name,
+        minimum_hold_bars: TREND_RECOVERY_V1.minimumHoldBars,
+        stop_loss: TREND_RECOVERY_V1.stopLoss,
+        trailing_drawdown: TREND_RECOVERY_V1.trailingDrawdown,
+        ma_break_bars: TREND_RECOVERY_V1.maBreakBars,
+      },
     },
     latest: {
       candle: latestDaily,
@@ -105,11 +114,13 @@ export async function runTechnicalAnalysis(
       latest_weekly: latestSignals(weeklySignals, latestWeekly.date),
       recent: allSignals.filter((signal) => signal.date >= recentStart).slice(-30),
       position_events: positionEvents.slice(-20),
+      baseline_v0_position_events: baselinePositionEvents.slice(-20),
     },
     warnings: [
       ...collected.warnings,
       ...(latestWeekly.partial ? ['The latest weekly candle is partial and may change before week close.'] : []),
       'Technical signals are based on historical prices and are not investment advice.',
+      'Trend Recovery V1 position events are experimental and are reported separately from raw formula signals and Baseline V0 events.',
       'Formula semantics are documented and tested; exact chart-platform parity requires a golden fixture.',
     ],
     unavailable_data: collected.unavailable_data,
@@ -122,7 +133,7 @@ export function createTechnicalAnalysis(
 ): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: 'technical_analysis',
-    description: 'Analyze daily/weekly technical indicators, trend, volatility, and recent formula signals for one China A-share or supported China stock index.',
+    description: TECHNICAL_ANALYSIS_DESCRIPTION,
     schema: TECHNICAL_ANALYSIS_SCHEMA,
     func: async (input) => {
       if (!token) throw new Error('TUSHARE_TOKEN is required for technical_analysis');

@@ -36,6 +36,12 @@ export type SignalName =
   | 'WEEKLY_BUY_LOWER'
   | 'WEEKLY_SELL_UPPER';
 
+export type StrategySignalName =
+  | 'STRATEGY_TREND_RECOVERY_ENTRY'
+  | 'STRATEGY_STOP_LOSS'
+  | 'STRATEGY_TRAILING_EXIT'
+  | 'STRATEGY_MA20_BREAK_EXIT';
+
 export interface TechnicalSignal {
   name: SignalName;
   side: 'buy' | 'sell';
@@ -48,7 +54,8 @@ export interface TechnicalSignal {
 export interface PositionEvent {
   date: string;
   action: 'open' | 'close';
-  signal: SignalName;
+  signal: SignalName | StrategySignalName;
+  evidence?: Record<string, number | boolean | null>;
 }
 
 export interface UnavailableData {
@@ -76,6 +83,13 @@ export interface TechnicalAnalysisResult {
     adjustment: 'qfq' | 'none' | 'not_applicable';
     boll: { period: 20; multiplier: 2; stddev: 'sample' | 'population' };
     kdj: { period: 9; smooth_k: 3; smooth_d: 3; initial: number };
+    strategy: {
+      name: 'trend_recovery_v1';
+      minimum_hold_bars: 5;
+      stop_loss: 0.08;
+      trailing_drawdown: 0.15;
+      ma_break_bars: 2;
+    };
   };
   latest?: {
     candle: Candle;
@@ -104,6 +118,7 @@ export interface TechnicalAnalysisResult {
     latest_weekly: TechnicalSignal[];
     recent: TechnicalSignal[];
     position_events: PositionEvent[];
+    baseline_v0_position_events: PositionEvent[];
   };
   warnings: string[];
   unavailable_data: UnavailableData[];

@@ -42,6 +42,9 @@ describe('technical_analysis tool core', () => {
     expect(result.methodology?.adjustment).toBe('qfq');
     expect(result.data_range?.daily_count).toBe(150);
     expect(result.signals?.recent.length).toBeLessThanOrEqual(30);
+    expect(result.methodology?.strategy.name).toBe('trend_recovery_v1');
+    expect(result.signals?.baseline_v0_position_events).toBeDefined();
+    expect(result.signals?.position_events).toBeDefined();
     expect(result.latest?.ma.ma60).not.toBeNull();
   });
 

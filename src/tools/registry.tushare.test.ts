@@ -44,6 +44,8 @@ describe('Tushare tool registration', () => {
     expect(tool?.description).toContain('技术面分析');
     expect(tool?.description).toContain('China stock index');
     expect(tool?.compactDescription).toContain('MA/BOLL/KDJ');
+    expect(tool?.compactDescription).toContain('技术面');
+    expect(tool?.tool.description).toContain('Trend Recovery V1');
     expect(tool?.concurrencySafe).toBe(true);
   });
 

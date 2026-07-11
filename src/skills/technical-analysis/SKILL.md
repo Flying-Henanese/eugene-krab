@@ -9,7 +9,7 @@ description: Performs deterministic technical analysis for China A-shares and su
 2. For a broader company request, optionally call `a_share_analysis` for fundamentals. For broad A-share mood, optionally call `market_sentiment_analysis`.
 3. Call `web_search` only when the user asks for recent events, policy, or news explanations. Never infer a news cause from price movement alone.
 4. State the latest data date, stock adjustment mode, and whether the latest weekly candle is partial.
-5. Explain trend, volatility, MA/BOLL/KDJ, and signals with the numeric evidence returned by the tool. Keep raw formula signals separate from position-state interpretation.
+5. Explain trend, volatility, MA/BOLL/KDJ, and signals with the numeric evidence returned by the tool. Keep raw formula signals, Baseline V0 position events, and experimental Trend Recovery V1 position events separate; do not present any of them as validated trade instructions.
 6. Format for Feishu with short sections and compact tables only when useful. Do not dump raw JSON.
 7. End with a concise caveat that historical technical signals can fail and are not investment advice.
 

@@ -209,7 +209,7 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       name: 'technical_analysis',
       tool: createTechnicalAnalysis(),
       description: TECHNICAL_ANALYSIS_DESCRIPTION,
-      compactDescription: 'Daily/weekly technical analysis for one China A-share or supported China index via Tushare plus local MA/BOLL/KDJ, trend, volatility, drawdown, and recent formula signals. Not for fundamentals, news, minute data, or trade execution.',
+      compactDescription: '分析单只A股或中国股指的技术面、近期走势、价格波动和买卖信号；通过Tushare日线加本地MA/BOLL/KDJ、回撤、Baseline V0与实验性Trend Recovery V1计算。不用于基本面、新闻、分钟行情或交易执行。',
       concurrencySafe: true,
     });
     tools.push({

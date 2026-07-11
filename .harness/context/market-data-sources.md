@@ -31,6 +31,7 @@ Use `technical_analysis` for one A-share or supported China index when the reque
 - A successful analysis requires at least 120 usable daily candles and 20 locally aggregated weekly candles. The default request uses a 450-calendar-day lookback and supports 120-1000 days.
 - The latest active weekly candle may be included but must be marked partial.
 - `technical_analysis` is the single deterministic core used by direct main-agent calls, the `technical-analysis` skill, and the `technical-analysis` subagent.
+- Raw TongdaXin-style formula signals remain available as Baseline V0 evidence. Experimental `trend_recovery_v1` position events are calculated separately: enter when close crosses above MA20 while MA20 > MA60 and K > D; exit after at least five bars and two consecutive closes below MA20, or earlier at an 8% close-based stop loss or 15% close-based trailing drawdown. Keep V0 and V1 clearly separated in user-facing explanations.
 
 Use the dedicated subagent mainly as one isolated lane of a broader fundamental/news/technical report. Narrow technical requests should call the tool directly. The subagent uses the normal fast-model policy; it explains deterministic tool output rather than recalculating indicators.
 
