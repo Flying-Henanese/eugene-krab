@@ -33,6 +33,7 @@ export type FeishuCardElement = FeishuCardDiv | FeishuCardColumnSet | FeishuCard
 export type FeishuInteractiveCard = {
   config: {
     wide_screen_mode: boolean;
+    update_multi: boolean;
   };
   header: {
     title: {
@@ -47,6 +48,8 @@ const CARD_TITLE = 'Eugene Krab';
 const MAX_COLUMNS = 4;
 const MAX_CELL_LENGTH = 60;
 const MAX_ELEMENTS = 80;
+const MAX_CARD_BYTES = 28 * 1024;
+const OMITTED_CONTENT_NOTICE = '内容较长，已省略部分内容。';
 
 export function formatFeishuTableCard(body: string): FeishuInteractiveCard | null {
   const segments = parseMarkdownTables(body);
@@ -84,20 +87,97 @@ export function formatFeishuTableCard(body: string): FeishuInteractiveCard | nul
     renderedTable = true;
   }
 
-  if (omittedRows && elements.length < MAX_ELEMENTS) {
-    elements.push(markdownDiv('内容较长，已省略部分表格行。'));
+  return finalizeCard(elements.length > 0 ? elements : [markdownDiv('无可展示内容。')], omittedRows);
+}
+
+export function formatFeishuAnswerCard(body: string): FeishuInteractiveCard {
+  const tableCard = formatFeishuTableCard(body);
+  if (tableCard) {
+    return tableCard;
   }
 
+  const content = body
+    .split('\n')
+    .map(convertMarkdownLine)
+    .join('\n')
+    .trim() || '无可展示内容。';
+  return finalizeCard([markdownDiv(content)]);
+}
+
+export function formatFeishuTextCard(text: string): FeishuInteractiveCard {
+  return finalizeCard([markdownDiv(text.trim() || '无可展示内容。')]);
+}
+
+function finalizeCard(
+  sourceElements: FeishuCardElement[],
+  contentWasOmitted = false,
+): FeishuInteractiveCard {
+  const elements = [...sourceElements];
+  let omitted = contentWasOmitted;
+  let card = buildCard(elements);
+
+  while (serializedBytes(card) > MAX_CARD_BYTES && elements.length > 1) {
+    elements.pop();
+    omitted = true;
+    card = buildCard(elements);
+  }
+
+  if (serializedBytes(card) > MAX_CARD_BYTES) {
+    const onlyElement = elements[0];
+    if (onlyElement?.tag === 'div') {
+      onlyElement.text.content = truncateToCardSize(onlyElement.text.content);
+      omitted = true;
+      card = buildCard(elements);
+    }
+  }
+
+  if (omitted) {
+    const notice = markdownDiv(OMITTED_CONTENT_NOTICE);
+    while (
+      elements.length > 0 &&
+      serializedBytes(buildCard([...elements, notice])) > MAX_CARD_BYTES
+    ) {
+      elements.pop();
+    }
+    elements.push(notice);
+  }
+
+  return buildCard(elements.length > 0 ? elements : [markdownDiv(OMITTED_CONTENT_NOTICE)]);
+}
+
+function buildCard(elements: FeishuCardElement[]): FeishuInteractiveCard {
   return {
-    config: { wide_screen_mode: true },
+    config: { wide_screen_mode: true, update_multi: true },
     header: {
       title: {
         tag: 'plain_text',
         content: CARD_TITLE,
       },
     },
-    elements: elements.length > 0 ? elements : [markdownDiv('无可展示内容。')],
+    elements,
   };
+}
+
+function serializedBytes(card: FeishuInteractiveCard): number {
+  return new TextEncoder().encode(JSON.stringify(card)).byteLength;
+}
+
+function truncateToCardSize(content: string): string {
+  let low = 0;
+  let high = content.length;
+  while (low < high) {
+    const midpoint = Math.ceil((low + high) / 2);
+    const candidate = buildCard([
+      markdownDiv(content.slice(0, midpoint)),
+      markdownDiv(OMITTED_CONTENT_NOTICE),
+    ]);
+    if (serializedBytes(candidate) <= MAX_CARD_BYTES) {
+      low = midpoint;
+    } else {
+      high = midpoint - 1;
+    }
+  }
+  return content.slice(0, low);
 }
 
 function pushTextSegment(elements: FeishuCardElement[], segment: Extract<FeishuMarkdownSegment, { type: 'text' }>): void {

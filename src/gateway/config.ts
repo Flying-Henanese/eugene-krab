@@ -6,6 +6,7 @@ import { dexterPath } from '../utils/paths.js';
 import { getSetting } from '../utils/config.js';
 
 const DEFAULT_GATEWAY_PATH = dexterPath('gateway.json');
+export const DEFAULT_FEISHU_PROCESSING_TEXT = '正在分析中，请稍候…';
 const DmPolicySchema = z.enum(['pairing', 'allowlist', 'open', 'disabled']);
 const GroupPolicySchema = z.enum(['open', 'allowlist', 'disabled']);
 const ReconnectSchema = z.object({
@@ -29,6 +30,11 @@ const WhatsAppAccountSchema = z.object({
 
 const FeishuAccountSchema = z.object({
   enabled: z.boolean().optional().default(true),
+});
+
+const FeishuProcessingCardSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  text: z.string().optional().default(DEFAULT_FEISHU_PROCESSING_TEXT),
 });
 
 const HeartbeatConfigSchema = z
@@ -75,6 +81,7 @@ const GatewayConfigSchema = z.object({
         .object({
           enabled: z.boolean().optional(),
           accounts: z.record(z.string(), FeishuAccountSchema).optional(),
+          processingCard: FeishuProcessingCardSchema.optional(),
         })
         .optional(),
     })
@@ -127,6 +134,10 @@ export type GatewayConfig = {
     feishu: {
       enabled: boolean;
       accounts: Record<string, z.infer<typeof FeishuAccountSchema>>;
+      processingCard: {
+        enabled: boolean;
+        text: string;
+      };
     };
   };
   bindings: Array<{
@@ -168,7 +179,11 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
       gateway: { accountId: 'default', logLevel: 'info' },
       channels: {
         whatsapp: { enabled: true, accounts: {}, allowFrom: [] },
-        feishu: { enabled: false, accounts: {} },
+        feishu: {
+          enabled: false,
+          accounts: {},
+          processingCard: { enabled: false, text: DEFAULT_FEISHU_PROCESSING_TEXT },
+        },
       },
       bindings: [],
     };
@@ -204,6 +219,12 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
       feishu: {
         enabled: parsed.channels?.feishu?.enabled ?? false,
         accounts: parsed.channels?.feishu?.accounts ?? {},
+        processingCard: {
+          enabled: parsed.channels?.feishu?.processingCard?.enabled ?? false,
+          text:
+            parsed.channels?.feishu?.processingCard?.text.trim() ||
+            DEFAULT_FEISHU_PROCESSING_TEXT,
+        },
       },
     },
     bindings: parsed.bindings ?? [],

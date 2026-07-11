@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { formatFeishuTableCard } from './card-format.js';
+import { formatFeishuAnswerCard, formatFeishuTableCard } from './card-format.js';
 
 describe('formatFeishuTableCard', () => {
   test('returns null when the body has no markdown table', () => {
@@ -17,7 +17,7 @@ describe('formatFeishuTableCard', () => {
     ].join('\n'));
 
     expect(card).toEqual({
-      config: { wide_screen_mode: true },
+      config: { wide_screen_mode: true, update_multi: true },
       header: {
         title: {
           tag: 'plain_text',
@@ -89,6 +89,34 @@ describe('formatFeishuTableCard', () => {
           text: { tag: 'lark_md', content: '近一个月显著回调。' },
         },
       ],
+    });
+  });
+
+  test('formats a regular markdown answer as an updateable card', () => {
+    const card = formatFeishuAnswerCard([
+      '## 结论',
+      '- **利润**继续修复',
+      '[查看来源](https://example.com)',
+    ].join('\n'));
+
+    expect(card.config).toEqual({ wide_screen_mode: true, update_multi: true });
+    expect(card.elements).toEqual([
+      {
+        tag: 'div',
+        text: {
+          tag: 'lark_md',
+          content: '**结论**\n• **利润**继续修复\n[查看来源](https://example.com)',
+        },
+      },
+    ]);
+  });
+
+  test('keeps serialized cards below the safe size limit', () => {
+    const card = formatFeishuAnswerCard('很长的回答'.repeat(20_000));
+    expect(new TextEncoder().encode(JSON.stringify(card)).byteLength).toBeLessThanOrEqual(28 * 1024);
+    expect(card.elements.at(-1)).toEqual({
+      tag: 'div',
+      text: { tag: 'lark_md', content: '内容较长，已省略部分内容。' },
     });
   });
 

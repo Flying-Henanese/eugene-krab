@@ -10,6 +10,7 @@ function createMockClient(createCalls: unknown[]): FeishuMessageClient {
             createCalls.push(payload);
             return {};
           },
+          patch: async () => ({}),
         },
       },
     },
@@ -101,6 +102,7 @@ describe('sendMessageFeishu', () => {
               }
               return {};
             },
+            patch: async () => ({}),
           },
         },
       },

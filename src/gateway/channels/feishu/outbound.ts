@@ -19,17 +19,28 @@ type FeishuMessagePayload =
       data: { receive_id: string; msg_type: 'interactive'; content: string };
     };
 
+type FeishuMessagePatchPayload = {
+  path: { message_id: string };
+  data: { content: string };
+};
+
+export type FeishuMessageResponse = {
+  code?: number;
+  data?: { message_id?: string };
+};
+
 export type FeishuMessageClient = {
   im: {
     v1: {
       message: {
-        create(payload: FeishuMessagePayload): Promise<unknown>;
+        create(payload: FeishuMessagePayload): Promise<FeishuMessageResponse>;
+        patch(payload: FeishuMessagePatchPayload): Promise<FeishuMessageResponse>;
       };
     };
   };
 };
 
-function createFeishuClient(params: SendMessageFeishuParams): FeishuMessageClient {
+export function createFeishuClient(params: Pick<SendMessageFeishuParams, 'appId' | 'appSecret'>): FeishuMessageClient {
   return new Lark.Client({
     appId: params.appId,
     appSecret: params.appSecret,

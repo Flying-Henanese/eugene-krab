@@ -27,8 +27,10 @@ Current Feishu behavior:
 - Ignores non-`p2p` chats and non-text message types.
 - Deduplicates message IDs with a TTL.
 - Sends outbound answers through Feishu-specific outbound formatting.
+- Can optionally send an updateable “processing” card before an agent run and replace it with the final answer. This is disabled by default under `channels.feishu.processingCard` so deployments without the Feishu update-message permission retain the existing behavior.
+- Falls back to the existing standalone outbound path when processing-card creation or final update fails; empty answers and agent failures are best-effort updates to a terminal card state.
 
-The first version intentionally excludes group chats, webhooks, cards/images, and project-local allowlists.
+The current scope still excludes group chats, webhooks, images, per-tool progress updates, and project-local allowlists.
 
 ## Gateway Config
 

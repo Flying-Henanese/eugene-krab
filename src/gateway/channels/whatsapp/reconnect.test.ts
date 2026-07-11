@@ -27,7 +27,11 @@ describe('whatsapp reconnect policy', () => {
       },
       channels: {
         whatsapp: { enabled: true, accounts: {}, allowFrom: [] },
-        feishu: { enabled: false, accounts: {} },
+        feishu: {
+          enabled: false,
+          accounts: {},
+          processingCard: { enabled: false, text: '正在分析中，请稍候…' },
+        },
       },
       bindings: [],
     } satisfies GatewayConfig;

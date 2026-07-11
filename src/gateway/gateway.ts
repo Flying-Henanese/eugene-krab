@@ -1,7 +1,11 @@
 import { createChannelManager } from './channels/manager.js';
 import { createFeishuPlugin } from './channels/feishu/plugin.js';
 import {
+  createFeishuProcessingCard,
   sendMessageFeishu,
+  updateFeishuProcessingCard,
+  updateFeishuProcessingCardToEmpty,
+  updateFeishuProcessingCardToError,
   type FeishuInboundMessage,
 } from './channels/feishu/index.js';
 import { createWhatsAppPlugin } from './channels/whatsapp/plugin.js';
@@ -19,7 +23,12 @@ import {
   resolveGatewayAgentModel,
   type GatewayConfig,
 } from './config.js';
-import { runAgentForMessage, isSessionRunning, enqueueForSession } from './agent-runner.js';
+import {
+  claimSessionForRun,
+  runAgentForMessage,
+  isSessionRunning,
+  enqueueForSession,
+} from './agent-runner.js';
 import { cleanMarkdownForWhatsApp } from './utils.js';
 import { startCronRunner } from '../cron/runner.js';
 import { ensureHeartbeatCronJob } from '../cron/heartbeat-migration.js';
@@ -220,10 +229,42 @@ async function handleInbound(cfg: GatewayConfig, inbound: WhatsAppInboundMessage
   }
 }
 
-async function handleFeishuInbound(cfg: GatewayConfig, inbound: FeishuInboundMessage): Promise<void> {
+type FeishuInboundDependencies = {
+  debugLog: (message: string) => void;
+  recordSessionMeta: typeof upsertSessionMeta;
+  resolveAccount: typeof resolveFeishuAccount;
+  claimSessionForRun: typeof claimSessionForRun;
+  enqueueForSession: typeof enqueueForSession;
+  runAgentForMessage: typeof runAgentForMessage;
+  createProcessingCard: typeof createFeishuProcessingCard;
+  updateProcessingCard: typeof updateFeishuProcessingCard;
+  updateProcessingCardToEmpty: typeof updateFeishuProcessingCardToEmpty;
+  updateProcessingCardToError: typeof updateFeishuProcessingCardToError;
+  sendMessage: typeof sendMessageFeishu;
+};
+
+const defaultFeishuInboundDependencies: FeishuInboundDependencies = {
+  debugLog,
+  recordSessionMeta: upsertSessionMeta,
+  resolveAccount: resolveFeishuAccount,
+  claimSessionForRun,
+  enqueueForSession,
+  runAgentForMessage,
+  createProcessingCard: createFeishuProcessingCard,
+  updateProcessingCard: updateFeishuProcessingCard,
+  updateProcessingCardToEmpty: updateFeishuProcessingCardToEmpty,
+  updateProcessingCardToError: updateFeishuProcessingCardToError,
+  sendMessage: sendMessageFeishu,
+};
+
+export async function handleFeishuInbound(
+  cfg: GatewayConfig,
+  inbound: FeishuInboundMessage,
+  dependencies: FeishuInboundDependencies = defaultFeishuInboundDependencies,
+): Promise<void> {
   const bodyPreview = elide(inbound.body.replace(/\n/g, ' '), 50);
   console.log(`Inbound Feishu message ${inbound.chatId} (${inbound.body.length} chars): "${bodyPreview}"`);
-  debugLog(`[gateway] handleFeishuInbound chatId=${inbound.chatId} body="${inbound.body.slice(0, 30)}..."`);
+  dependencies.debugLog(`[gateway] handleFeishuInbound chatId=${inbound.chatId} body="${inbound.body.slice(0, 30)}..."`);
 
   const route = resolveRoute({
     cfg,
@@ -233,7 +274,7 @@ async function handleFeishuInbound(cfg: GatewayConfig, inbound: FeishuInboundMes
   });
 
   const storePath = resolveSessionStorePath(route.agentId);
-  upsertSessionMeta({
+  dependencies.recordSessionMeta({
     storePath,
     sessionKey: route.sessionKey,
     channel: 'feishu',
@@ -242,18 +283,39 @@ async function handleFeishuInbound(cfg: GatewayConfig, inbound: FeishuInboundMes
     agentId: route.agentId,
   });
 
+  const account = dependencies.resolveAccount(cfg, route.accountId);
+  let processingMessageId: string | null = null;
+
   try {
     const { model, modelProvider } = resolveGatewayAgentModel(cfg);
 
-    if (isSessionRunning(route.sessionKey)) {
-      debugLog(`[gateway] agent busy for feishu session=${route.sessionKey}, enqueueing`);
-      enqueueForSession(route.sessionKey, model, inbound.body);
+    if (!dependencies.claimSessionForRun(route.sessionKey, model)) {
+      dependencies.debugLog(`[gateway] agent busy for feishu session=${route.sessionKey}, enqueueing`);
+      dependencies.enqueueForSession(route.sessionKey, model, inbound.body);
       return;
     }
 
-    debugLog(`[gateway] running feishu agent for session=${route.sessionKey}`);
+    if (
+      cfg.channels.feishu.processingCard.enabled &&
+      account.appId &&
+      account.appSecret
+    ) {
+      try {
+        processingMessageId = await dependencies.createProcessingCard({
+          appId: account.appId,
+          appSecret: account.appSecret,
+          chatId: inbound.chatId,
+          text: cfg.channels.feishu.processingCard.text,
+        });
+        dependencies.debugLog(`[gateway] feishu processing card created`);
+      } catch {
+        dependencies.debugLog(`[gateway] feishu processing card create failed; continuing without it`);
+      }
+    }
+
+    dependencies.debugLog(`[gateway] running feishu agent for session=${route.sessionKey}`);
     const startedAt = Date.now();
-    const answer = await runAgentForMessage({
+    const answer = await dependencies.runAgentForMessage({
       sessionKey: route.sessionKey,
       query: inbound.body,
       model,
@@ -263,26 +325,67 @@ async function handleFeishuInbound(cfg: GatewayConfig, inbound: FeishuInboundMes
     const durationMs = Date.now() - startedAt;
 
     if (answer.trim()) {
-      const account = resolveFeishuAccount(cfg, route.accountId);
       if (!account.appId || !account.appSecret) {
         throw new Error('Feishu credentials are missing. Set FEISHU_APP_ID and FEISHU_APP_SECRET.');
       }
-      await sendMessageFeishu({
+
+      if (processingMessageId) {
+        try {
+          await dependencies.updateProcessingCard({
+            appId: account.appId,
+            appSecret: account.appSecret,
+            messageId: processingMessageId,
+            body: answer.trim(),
+          });
+          console.log(`Updated Feishu reply card (${answer.length} chars, ${durationMs}ms)`);
+          dependencies.debugLog(`[gateway] feishu processing card updated with reply`);
+          return;
+        } catch {
+          dependencies.debugLog(`[gateway] feishu processing card update failed; sending standalone reply`);
+        }
+      }
+
+      await dependencies.sendMessage({
         appId: account.appId,
         appSecret: account.appSecret,
         chatId: inbound.chatId,
         body: answer.trim(),
       });
       console.log(`Sent Feishu reply (${answer.length} chars, ${durationMs}ms)`);
-      debugLog(`[gateway] feishu reply sent`);
+      dependencies.debugLog(`[gateway] feishu reply sent`);
     } else {
       console.log(`Agent returned empty Feishu response (${durationMs}ms)`);
-      debugLog(`[gateway] empty feishu answer, not sending`);
+      if (processingMessageId && account.appId && account.appSecret) {
+        try {
+          await dependencies.updateProcessingCardToEmpty({
+            appId: account.appId,
+            appSecret: account.appSecret,
+            messageId: processingMessageId,
+          });
+          dependencies.debugLog(`[gateway] empty feishu answer updated on processing card`);
+        } catch {
+          dependencies.debugLog(`[gateway] failed to terminate empty feishu processing card`);
+        }
+      } else {
+        dependencies.debugLog(`[gateway] empty feishu answer, not sending`);
+      }
     }
   } catch (err) {
+    if (processingMessageId && account.appId && account.appSecret) {
+      try {
+        await dependencies.updateProcessingCardToError({
+          appId: account.appId,
+          appSecret: account.appSecret,
+          messageId: processingMessageId,
+        });
+        dependencies.debugLog(`[gateway] failed feishu run terminated processing card`);
+      } catch {
+        dependencies.debugLog(`[gateway] failed to terminate errored feishu processing card`);
+      }
+    }
     const msg = err instanceof Error ? err.message : String(err);
     console.log(`Error: ${msg}`);
-    debugLog(`[gateway] FEISHU ERROR: ${msg}`);
+    dependencies.debugLog(`[gateway] FEISHU ERROR: ${msg}`);
   }
 }
 

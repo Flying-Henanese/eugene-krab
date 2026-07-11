@@ -37,6 +37,16 @@ export function isSessionRunning(sessionKey: string): boolean {
   return sessions.get(sessionKey)?.isRunning ?? false;
 }
 
+/** Atomically reserve a session before any asynchronous pre-run channel work. */
+export function claimSessionForRun(sessionKey: string, model: string): boolean {
+  const session = getSession(sessionKey, model);
+  if (session.isRunning) {
+    return false;
+  }
+  session.isRunning = true;
+  return true;
+}
+
 /**
  * Enqueue a message for a session whose agent is currently running.
  * The agent will drain the queue between tool rounds.
@@ -82,31 +92,8 @@ export async function runAgentForMessage(req: AgentRunRequest): Promise<string> 
       session.history.saveUserQuery(req.query);
     }
 
-    const agent = await Agent.create({
-      model: req.model,
-      modelProvider: req.modelProvider,
-      maxIterations: req.maxIterations ?? 10,
-      signal: req.signal,
-      channel: req.channel,
-      groupContext: req.groupContext,
-      memoryEnabled: !isolated,
-      messageQueue: session?.queue,
-    });
-
-    for await (const event of agent.run(req.query, session?.history)) {
-      await req.onEvent?.(event);
-      if (event.type === 'done') {
-        finalAnswer = event.answer;
-      }
-    }
-
-    // Post-run: drain any messages that arrived after the agent's last check
-    if (session && !session.queue.isEmpty()) {
-      const remaining = session.queue.dequeueAll();
-      const mergedText = remaining.map(m => m.text).join('\n\n');
-      session.history.saveUserQuery(mergedText);
-
-      const followUp = await Agent.create({
+    try {
+      const agent = await Agent.create({
         model: req.model,
         modelProvider: req.modelProvider,
         maxIterations: req.maxIterations ?? 10,
@@ -114,28 +101,53 @@ export async function runAgentForMessage(req: AgentRunRequest): Promise<string> 
         channel: req.channel,
         groupContext: req.groupContext,
         memoryEnabled: !isolated,
-        messageQueue: session.queue,
+        messageQueue: session?.queue,
       });
 
-      for await (const event of followUp.run(mergedText, session.history)) {
+      for await (const event of agent.run(req.query, session?.history)) {
         await req.onEvent?.(event);
         if (event.type === 'done') {
           finalAnswer = event.answer;
         }
       }
-    }
 
-    if (finalAnswer && session) {
-      await session.history.saveAnswer(finalAnswer);
-    }
+      // Post-run: drain any messages that arrived after the agent's last check
+      if (session && !session.queue.isEmpty()) {
+        const remaining = session.queue.dequeueAll();
+        const mergedText = remaining.map(m => m.text).join('\n\n');
+        session.history.saveUserQuery(mergedText);
 
-    // Prune HEARTBEAT_OK turns to avoid context pollution
-    if (session && req.isHeartbeat && finalAnswer.trim().toUpperCase().includes(HEARTBEAT_OK_TOKEN)) {
-      session.history.pruneLastTurn();
-    }
+        const followUp = await Agent.create({
+          model: req.model,
+          modelProvider: req.modelProvider,
+          maxIterations: req.maxIterations ?? 10,
+          signal: req.signal,
+          channel: req.channel,
+          groupContext: req.groupContext,
+          memoryEnabled: !isolated,
+          messageQueue: session.queue,
+        });
 
-    if (session) {
-      session.isRunning = false;
+        for await (const event of followUp.run(mergedText, session.history)) {
+          await req.onEvent?.(event);
+          if (event.type === 'done') {
+            finalAnswer = event.answer;
+          }
+        }
+      }
+
+      if (finalAnswer && session) {
+        await session.history.saveAnswer(finalAnswer);
+      }
+
+      // Prune HEARTBEAT_OK turns to avoid context pollution
+      if (session && req.isHeartbeat && finalAnswer.trim().toUpperCase().includes(HEARTBEAT_OK_TOKEN)) {
+        session.history.pruneLastTurn();
+      }
+    } finally {
+      if (session) {
+        session.isRunning = false;
+      }
     }
   };
 

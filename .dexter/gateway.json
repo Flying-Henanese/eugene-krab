@@ -1,7 +1,11 @@
 {
   "channels": {
     "feishu": {
-      "enabled": true
+      "enabled": true,
+      "processingCard": {
+        "enabled": true,
+        "text": "正在分析中，请稍候…"
+      }
     }
   }
 }
