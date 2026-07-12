@@ -1,29 +1,5 @@
 import type { TushareRow } from './client.js';
 
-const FINANCIAL_FIELDS = [
-  'ts_code',
-  'ann_date',
-  'f_ann_date',
-  'end_date',
-  'report_type',
-  'comp_type',
-  'basic_eps',
-  'diluted_eps',
-  'total_revenue',
-  'revenue',
-  'n_income',
-  'total_profit',
-  'total_assets',
-  'total_liab',
-  'total_hldr_eqy_exc_min_int',
-  'net_cash_flows_oper_act',
-  'roe',
-  'roe_dt',
-  'grossprofit_margin',
-  'netprofit_margin',
-  'debt_to_assets',
-];
-
 const MARKET_SNAPSHOT_FIELDS = [
   'ts_code',
   'trade_date',
@@ -46,8 +22,59 @@ export function pickMarketSnapshot(rows: TushareRow[]): TushareRow | null {
   return row ? pickFields(row, MARKET_SNAPSHOT_FIELDS) : null;
 }
 
-export function pickFinancialRows(rows: TushareRow[], limit = 4): TushareRow[] {
-  return rows.slice(0, limit).map((row) => pickFields(row, FINANCIAL_FIELDS));
+export function pickLatestFinancialRows(
+  rows: TushareRow[],
+  fields: string[],
+  limit = 8,
+): TushareRow[] {
+  const rowsByPeriod = new Map<string, TushareRow>();
+  for (const row of rows) {
+    const key = [row.ts_code, row.end_date, row.report_type, row.comp_type].join('|');
+    const current = rowsByPeriod.get(key);
+    if (!current || isPreferredFinancialRow(row, current)) {
+      rowsByPeriod.set(key, row);
+    }
+  }
+
+  return Array.from(rowsByPeriod.values())
+    .sort(compareLatestFirst)
+    .slice(0, limit)
+    .map((row) => pickFields(row, fields));
+}
+
+export function pickRows(rows: TushareRow[], fields: string[], limit: number): TushareRow[] {
+  return rows.slice(0, limit).map((row) => pickFields(row, fields));
+}
+
+export function pickLatestPeriodRows(
+  rows: TushareRow[],
+  fields: string[],
+  maxPeriods: number,
+  limit: number,
+): TushareRow[] {
+  const periods = Array.from(new Set(
+    rows.map((row) => String(row.end_date ?? '')).filter(Boolean),
+  )).sort((left, right) => right.localeCompare(left)).slice(0, maxPeriods);
+  return rows
+    .filter((row) => periods.includes(String(row.end_date ?? '')))
+    .slice(0, limit)
+    .map((row) => pickFields(row, fields));
+}
+
+function isPreferredFinancialRow(candidate: TushareRow, current: TushareRow): boolean {
+  if (candidate.update_flag === '1' && current.update_flag !== '1') return true;
+  if (candidate.update_flag !== '1' && current.update_flag === '1') return false;
+  return financialRowDate(candidate) > financialRowDate(current);
+}
+
+function financialRowDate(row: TushareRow): string {
+  return String(row.f_ann_date ?? row.ann_date ?? '');
+}
+
+function compareLatestFirst(left: TushareRow, right: TushareRow): number {
+  const periodComparison = String(right.end_date ?? '').localeCompare(String(left.end_date ?? ''));
+  if (periodComparison !== 0) return periodComparison;
+  return financialRowDate(right).localeCompare(financialRowDate(left));
 }
 
 function pickFields(row: TushareRow, fields: string[]): TushareRow {

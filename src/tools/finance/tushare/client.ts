@@ -8,6 +8,11 @@ export type TushareApiName =
   | 'balancesheet'
   | 'cashflow'
   | 'fina_indicator'
+  | 'fina_mainbz'
+  | 'fina_audit'
+  | 'dividend'
+  | 'forecast'
+  | 'express'
   | 'namechange'
   | 'trade_cal'
   | 'index_daily'
@@ -32,6 +37,8 @@ export interface TushareResponse {
 export interface TushareClient {
   call(apiName: TushareApiName, params?: Record<string, unknown>, fields?: string[]): Promise<TushareRow[]>;
 }
+
+export const TUSHARE_API_URL = 'https://api.tushare.pro';
 
 export class TusharePermissionError extends Error {
   readonly apiName: string;
@@ -88,7 +95,7 @@ export class HttpTushareClient implements TushareClient {
   }
 
   async call(apiName: TushareApiName, params: Record<string, unknown> = {}, fields: string[] = []): Promise<TushareRow[]> {
-    const response = await fetch('http://api.tushare.pro', {
+    const response = await fetch(TUSHARE_API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

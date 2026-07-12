@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { normalizeTushareResponse, TusharePermissionError } from './client.js';
+import {
+  HttpTushareClient,
+  normalizeTushareResponse,
+  TUSHARE_API_URL,
+  TusharePermissionError,
+} from './client.js';
 
 describe('normalizeTushareResponse', () => {
   test('converts fields and items into row objects', () => {
@@ -40,5 +45,35 @@ describe('normalizeTushareResponse', () => {
         data: { fields: [], items: [] },
       }),
     ).toThrow(TusharePermissionError);
+  });
+});
+
+describe('HttpTushareClient transport', () => {
+  test('sends credentials only to the HTTPS API endpoint', async () => {
+    const originalFetch = globalThis.fetch;
+    let requestedUrl = '';
+    let requestBody: Record<string, unknown> | null = null;
+    globalThis.fetch = (async (input, init) => {
+      requestedUrl = String(input);
+      requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      return new Response(JSON.stringify({ code: 0, data: { fields: [], items: [] } }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    try {
+      await new HttpTushareClient('placeholder-token').call('daily');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    expect(TUSHARE_API_URL).toBe('https://api.tushare.pro');
+    expect(requestedUrl).toBe(TUSHARE_API_URL);
+    expect(requestedUrl).not.toContain('placeholder-token');
+    expect(requestBody).toMatchObject({
+      api_name: 'daily',
+      token: 'placeholder-token',
+    });
   });
 });
