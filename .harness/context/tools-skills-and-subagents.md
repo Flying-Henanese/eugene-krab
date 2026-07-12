@@ -22,20 +22,25 @@ Main-agent tool choice is model-driven after the tool set is bound. Compact regi
 - `a_share_analysis` appears only when `TUSHARE_TOKEN` is set.
 - `market_sentiment_analysis` appears only when `TUSHARE_TOKEN` is set.
 - `technical_analysis` appears only when `TUSHARE_TOKEN` is set.
+- `financial_calculator` is always available for deterministic CNY/万元/亿元 conversion, numeric comparison, and percentage-change arithmetic; it does not fetch data or make valuation judgments.
 - `x_search` appears only when `X_BEARER_TOKEN` is set.
 - `ask_user_question` is CLI-only. `Agent.create()` removes it for non-CLI channels.
 
 ## Skills
 
-Skills are SKILL.md directories under `src/skills/`. They are discovered at startup and exposed through the `skill` tool. Built-ins currently include DCF, help, X research, memo writing, and the China A-share/index `technical-analysis` workflow.
+Skills are SKILL.md directories under `src/skills/`. They are discovered at startup and exposed through the `skill` tool. Built-ins currently include DCF, help, X research, memo writing, the China A-share/index `technical-analysis` workflow, and the single-A-share `stock-analysis` workflow.
 
 Use skills for reusable workflows. Do not hard-code skill-specific behavior into the general agent loop unless the behavior is truly global.
 
 For technical analysis, keep the three surfaces distinct:
 
-- A narrow request about one A-share/index trend, MA, BOLL, KDJ, volatility, drawdown, or signals should use `technical_analysis` directly.
+- A narrow request about one A-share/index trend alignment, MA, BOLL, KDJ, volatility, realized drawdown, technical state, or observed structural changes should use `technical_analysis` directly.
 - The `technical-analysis` skill supplies a structured, Feishu-friendly reporting workflow and calls the same tool first.
 - A broad company report may delegate one isolated technical lane to the `technical-analysis` subagent while other lanes cover fundamentals or news.
+
+All three surfaces consume the same neutral public assessment. Raw V0/V1 research events stay behind the tool adapter and must not be reconstructed into transaction actions by the main agent, skill, or subagent. Feishu and CLI differ only in presentation density; neither has a separate strategy result contract.
+
+Use `stock-analysis` for broad, single-A-share requests such as “分析一下某只股票”, “深入分析某公司”, or “这只股票最近怎么样” when the user has not limited the request to one lane. It orchestrates `a_share_analysis`, `technical_analysis`, current public information, and `financial_calculator` for material conversions or arithmetic, prioritizes primary sources, separates disclosed facts from calculations and third-party views, and uses a neutral aligned/divergent/insufficient evidence relationship. It must not replace narrow technical-only, fundamental-only, news-only, broad-market, DCF, memo, or multi-company workflows. The skill adds workflow and a pre-publication checklist; it is not a separate reviewer agent.
 
 Explicit wording such as “调用 technical_analysis 分析 600519.SH 的日周线、均线、BOLL、KDJ、波动率和近期信号” is the most reliable manual trigger. Vague prompts such as “茅台最近怎么样” may reasonably route to other finance or search capabilities because the runtime does not use deterministic keyword routing.
 
@@ -49,6 +54,9 @@ Model policy:
 - `SUBAGENT_MODEL` overrides all subagents.
 - Otherwise the subagent uses the provider fast model for the parent model.
 - `DEEPSEEK_SUBAGENT_REASONING_EFFORT` controls DeepSeek subagent reasoning effort.
+- `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT` overrides reasoning effort only for analysis subagents; it falls back to the general subagent setting and then the main DeepSeek setting.
+
+Keep ordinary one-company analysis in the main agent so the loaded skill, user rules, and source context remain available during final synthesis. Use `analysis` subagents for independent company lanes in a multi-company comparison or dense multi-year statement work; give each comparison worker identical periods, metrics, units, and evidence rules, and let the main agent perform the cross-company comparison. The analysis worker calls `a_share_analysis` exactly once, groups material calculator work into one call, and uses at most one web search for explicitly requested current context. The main agent must then perform a like-for-like evidence review rather than concatenating worker conclusions. The analysis worker uses structured Tushare statements for ordinary A-share financial analysis and does not require annual-report PDF parsing.
 
 The dedicated `technical-analysis` subagent is intended for an isolated technical lane inside a broader report. It calls the same deterministic `technical_analysis` tool available to the main agent and skill. It intentionally follows the normal fast-model policy; only the existing `analysis` type receives `SUBAGENT_ANALYSIS_MODEL`.
 

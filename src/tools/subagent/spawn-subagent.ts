@@ -41,12 +41,13 @@ Delegate a focused, self-contained sub-task to an isolated subagent that runs it
 
 ## When to Use
 
-- A sub-task is substantial enough that its intermediate tool output would clutter your own context (deep research on one topic, analysis of one company).
+- A sub-task is substantial enough that its intermediate tool output would clutter your own context (deep research on one topic, one company lane in a multi-company comparison, or dense multi-year financial-statement work).
 - You have multiple INDEPENDENT sub-tasks: emit several spawn_subagent calls in a SINGLE turn and they run in parallel.
 
 ## When NOT to Use
 
 - Trivial single-tool lookups you can do directly.
+- An ordinary one-company analysis that the main agent can complete with its loaded skill rules and structured tools.
 - Sub-tasks that depend on each other's output (run those yourself, or chain across turns).
 
 ## How It Works
@@ -89,8 +90,11 @@ export function resolveSubagentModel(parentModel: string, typeKey: string): stri
   return getFastModel(resolveProvider(parentModel).id, parentModel);
 }
 
-export function resolveSubagentReasoningEffort(): DeepSeekReasoningEffort {
-  return resolveDeepSeekReasoningEffort(process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT);
+export function resolveSubagentReasoningEffort(typeKey: string): DeepSeekReasoningEffort {
+  const configured = typeKey === 'analysis'
+    ? process.env.DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT ?? process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT
+    : process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
+  return resolveDeepSeekReasoningEffort(configured);
 }
 
 /**
@@ -110,7 +114,7 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
       const typeCfg = SUBAGENT_TYPES[typeKey] ?? SUBAGENT_TYPES[DEFAULT_SUBAGENT_TYPE];
       const toolAllowlist = resolveSubagentTools(typeKey);
       const subagentModel = resolveSubagentModel(model, typeKey);
-      const reasoningEffort = resolveSubagentReasoningEffort();
+      const reasoningEffort = resolveSubagentReasoningEffort(typeKey);
 
       // Lazy import to break the registry → spawn-subagent → agent → registry cycle.
       // By first invocation all modules are fully loaded.

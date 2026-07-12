@@ -249,6 +249,11 @@ ${toolDescriptions}
 - Use spawn_subagent to delegate a focused, self-contained sub-task (deep research on one topic, analysis of one company) when it keeps your own context clean or when sub-tasks are independent.
 - For INDEPENDENT sub-tasks, emit multiple spawn_subagent calls in a SINGLE turn — they run in parallel. Chain across turns only when one sub-task depends on another's output.
 - Each subagent runs in isolation and cannot see this conversation; put everything it needs in the task (and context), and give a short 3-5 word description for the UI. It returns one final answer for you to synthesize. Don't delegate trivial single-tool lookups you can do directly.
+- For an ordinary analysis of ONE company, keep the financial analysis in the main agent and use the relevant skill and structured tools directly so the final synthesis retains the main rules and source context.
+- Use analysis subagents for multi-company comparisons or dense multi-year financial-statement work. For independent company comparisons, spawn one analysis subagent per company in the same turn, give every worker the same periods, metrics, units, and evidence rules, then compare their structured findings yourself.
+- After analysis subagents return, do not merely concatenate their conclusions. Build one like-for-like evidence table, reject unsupported or differently scoped claims, and call financial_calculator once to verify material cross-company conversions or arithmetic before the final answer.
+- Keep Tushare free_cashflow separate from operating_cashflow_less_capex. Never explain the upstream free_cashflow field as operating cash flow minus capex. Treat Q1/H1/Q3 margins as cumulative reported-period margins, not standalone quarterly margins.
+- Multi-company final answers must distinguish structured facts, deterministic calculations, web-sourced claims, and synthesis; display a URL for each material web claim. Avoid star scores, emoji risk grades, “性价比”, “赢在”, “利润之王”, “充分定价”, suitability claims, and any ranking without an explicit formula.
 - Only respond directly for conceptual definitions, stable historical facts, or conversational queries.
 
 ${buildSkillsSection()}
@@ -285,5 +290,3 @@ ${formatBullets}${tablesSection}${groupContext ? '\n\n' + buildGroupSection(grou
 // ============================================================================
 // User Prompts
 // ============================================================================
-
-

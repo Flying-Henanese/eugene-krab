@@ -1,5 +1,12 @@
 import { StructuredToolInterface } from '@langchain/core/tools';
-import { createGetFinancials, createGetMarketData, createReadFilings, createScreenStocks } from './finance/index.js';
+import {
+  createFinancialCalculator,
+  createGetFinancials,
+  createGetMarketData,
+  createReadFilings,
+  createScreenStocks,
+  FINANCIAL_CALCULATOR_DESCRIPTION,
+} from './finance/index.js';
 import { exaSearch, perplexitySearch, tavilySearch, langSearch, WEB_SEARCH_DESCRIPTION, xSearchTool, X_SEARCH_DESCRIPTION } from './search/index.js';
 import { createWebSearchTool, type WebSearchProvider } from './search/web-search.js';
 import { getSetting } from '../utils/config.js';
@@ -82,6 +89,13 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       tool: createScreenStocks(model),
       description: SCREEN_STOCKS_DESCRIPTION,
       compactDescription: 'Screen stocks by financial criteria (P/E, growth, margins, etc.).',
+      concurrencySafe: true,
+    },
+    {
+      name: 'financial_calculator',
+      tool: createFinancialCalculator(),
+      description: FINANCIAL_CALCULATOR_DESCRIPTION,
+      compactDescription: 'Deterministically converts CNY/万元/亿元, compares numeric values, and calculates percentage changes; use before publishing material derived financial claims.',
       concurrencySafe: true,
     },
     {
@@ -209,14 +223,14 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       name: 'technical_analysis',
       tool: createTechnicalAnalysis(),
       description: TECHNICAL_ANALYSIS_DESCRIPTION,
-      compactDescription: '分析单只A股或中国股指的技术面、近期走势、价格波动和买卖信号；通过Tushare日线加本地MA/BOLL/KDJ、回撤、Baseline V0与实验性Trend Recovery V1计算。不用于基本面、新闻、分钟行情或交易执行。',
+      compactDescription: '描述单只A股或中国股指的技术面状态、周期关系、结构变化与确认/失效条件；使用本地MA/BOLL/KDJ，不预测后续方向、不提供T+N风险判断或交易建议。短期状态可在未来5个交易日内复查，但T+5不是预测有效期；V2.1不进入普通单标的输出。',
       concurrencySafe: true,
     });
     tools.push({
       name: 'a_share_analysis',
       tool: createAShareAnalysis(),
       description: A_SHARE_ANALYSIS_DESCRIPTION,
-      compactDescription: 'China A-share structured data via Tushare. Use for A-share tickers/names, PE/PB/ROE/revenue/profit/cash-flow snapshots; pair with web_search for current Chinese market context.',
+      compactDescription: 'China A-share structured data via Tushare: valuation, multi-period statements, cash flow, ratios, business composition, audit, dividends, forecasts, and express reports. Use this instead of annual-report PDF parsing for ordinary financial analysis; pair with web_search for current context.',
       concurrencySafe: true,
     });
     tools.push({
