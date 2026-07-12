@@ -42,6 +42,7 @@ describe('technical_analysis tool core', () => {
     expect(result.methodology?.adjustment).toBe('qfq');
     expect(result.data_range?.daily_count).toBe(150);
     expect(result.signals?.recent.length).toBeLessThanOrEqual(30);
+    expect(result.signals?.recent_start_date).toBe(dateAt(130));
     expect(result.methodology?.strategy.name).toBe('trend_recovery_v1');
     expect(result.signals?.baseline_v0_position_events).toBeDefined();
     expect(result.signals?.position_events).toBeDefined();
@@ -65,5 +66,26 @@ describe('technical_analysis tool core', () => {
   test('requires a token when invoking the public tool directly', async () => {
     const tool = createTechnicalAnalysis('');
     await expect(tool.invoke(baseInput)).rejects.toThrow('TUSHARE_TOKEN');
+  });
+
+  test('exposes only the neutral public assessment to CLI and gateway agents', async () => {
+    const tool = createTechnicalAnalysis('test-token', () => new FakeClient());
+    const response = JSON.parse(String(await tool.invoke(baseInput))) as { data: Record<string, unknown> };
+    const serialized = JSON.stringify(response.data);
+
+    expect(response.data).toHaveProperty('assessment');
+    expect(response.data).toHaveProperty('assessment.structural_changes');
+    expect(response.data).not.toHaveProperty('assessment.risk_alerts');
+    expect(response.data).not.toHaveProperty('signals');
+    expect(response.data).not.toHaveProperty('interpretation');
+    expect(response.data).not.toHaveProperty('methodology.strategy');
+    expect(response.data).toHaveProperty('latest.price.closing_price');
+    expect(response.data).toHaveProperty('assessment.evidence_quality.directional_probability', null);
+    expect(response.data).toHaveProperty(
+      'assessment.evidence_quality.analysis_scope',
+      'descriptive_state_and_structure',
+    );
+    expect(serialized).not.toMatch(/STRATEGY_|BUY_|SELL_/);
+    expect(serialized).not.toMatch(/"(?:action|side|signal|entry|exit|execute)"\s*:/i);
   });
 });

@@ -2,6 +2,7 @@ import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { formatToolResult } from '../../types.js';
 import { HttpTushareClient, type TushareClient } from '../tushare/client.js';
+import { toPublicTechnicalAnalysisResult } from './assessment.js';
 import { calculateIndicators } from './indicators.js';
 import { interpretPositionEvents } from './position-state.js';
 import { collectTechnicalData } from './provider.js';
@@ -11,11 +12,11 @@ import { buildTechnicalSummary } from './summary.js';
 import type { TechnicalAnalysisResult, TechnicalSignal } from './types.js';
 
 export const TECHNICAL_ANALYSIS_DESCRIPTION = `
-Deterministic daily/weekly technical analysis for one China A-share or supported China stock index. Uses Tushare OHLC data and local TypeScript calculations for MA5/10/20/30/60, BOLL(20,2), KDJ(9,3,3), trend, volatility, drawdown, raw formula signals, Baseline V0 events, and experimental Trend Recovery V1 position events.
+Descriptive daily/weekly technical-state analysis for one China A-share or supported China stock index. Uses Tushare OHLC data and local TypeScript calculations for MA5/10/20/30/60, BOLL(20,2), KDJ(9,3,3), trend alignment, momentum, volatility, drawdown, neutral technical observations, and observed structural changes. Baseline V0 formula evidence and experimental Trend Recovery V1 historical state events support the description; they do not constitute a validated predictive or trading strategy.
 
-Use for Chinese requests about 技术面分析、近期走势、价格波动、波动率、均线、布林带、KDJ、超买超卖、买卖信号, including supported indices such as 上证指数、深证成指、创业板指、沪深300、中证500、科创50.
+Use for Chinese requests about 技术面分析、近期走势、价格波动、波动率、均线、布林带、KDJ、超买超卖、技术状态、技术结构变化、已发生回撤, and supported indices such as 上证指数、深证成指、创业板指、沪深300、中证500、科创50.
 
-Do not use for valuation or financial statements alone, US/global equities, current news or policy explanations, real-time/minute data, or trade execution. Pair with a_share_analysis for fundamentals and web_search for explicitly requested current-event context.
+Upper or lower Bollinger-band contacts are neutral location observations, not opportunities, reversal signals, or future-risk forecasts. Experimental Applicability V2.1 remains offline research and is not included in ordinary single-symbol output. Describe technical state, observed structural changes, realized drawdowns, multi-horizon tension, and conditions that would confirm or invalidate the current state. The next five trading sessions may be used as a review cadence for short-term daily momentum, band contact, and recent structural changes, but T+5 is not a validated predictive horizon; MA20/MA60 and 20/60-day context remain medium-term background until state changes. Do not claim that an event raises future loss probability or covers a T+N horizon. Do not turn technical events into buy/sell recommendations, return probabilities, personalized position guidance, or order instructions. Do not use for valuation or financial statements alone, US/global equities, current news or policy explanations, or real-time/minute data. Pair with a_share_analysis for fundamentals and web_search for explicitly requested current-event context.
 `.trim();
 
 export const TECHNICAL_ANALYSIS_SCHEMA = z.object({
@@ -110,6 +111,7 @@ export async function runTechnicalAnalysis(
     },
     ...summary,
     signals: {
+      recent_start_date: recentStart,
       latest_daily: latestSignals(dailySignals, latestDaily.date),
       latest_weekly: latestSignals(weeklySignals, latestWeekly.date),
       recent: allSignals.filter((signal) => signal.date >= recentStart).slice(-30),
@@ -137,7 +139,8 @@ export function createTechnicalAnalysis(
     schema: TECHNICAL_ANALYSIS_SCHEMA,
     func: async (input) => {
       if (!token) throw new Error('TUSHARE_TOKEN is required for technical_analysis');
-      return formatToolResult(roundNumbers(await runTechnicalAnalysis(input, clientFactory(token))), []);
+      const internalResult = await runTechnicalAnalysis(input, clientFactory(token));
+      return formatToolResult(roundNumbers(toPublicTechnicalAnalysisResult(internalResult)), []);
     },
   });
 }
