@@ -41,7 +41,7 @@ Delegate a focused, self-contained sub-task to an isolated subagent that runs it
 
 ## When to Use
 
-- A sub-task is substantial enough that its intermediate tool output would clutter your own context (deep research on one topic, one company lane in a multi-company comparison, or dense multi-year financial-statement work).
+- A sub-task is substantial enough that its intermediate tool output would clutter your own context (deep research on one topic, a standardized company lane in a multi-company comparison, or a bounded dense multi-year financial evidence packet).
 - You have multiple INDEPENDENT sub-tasks: emit several spawn_subagent calls in a SINGLE turn and they run in parallel.
 
 ## When NOT to Use
@@ -53,6 +53,13 @@ Delegate a focused, self-contained sub-task to an isolated subagent that runs it
 ## How It Works
 
 The subagent runs in isolation — it cannot see this conversation and cannot delegate further. Put everything it needs into \`task\` (and optional \`context\`). It returns one complete answer that you then synthesize.
+
+## Financial Routing
+
+- research: an isolated multi-step current-information lane in a broader company report; require dated, attributed facts, URLs, conflicts, and limitations rather than a company-level investment conclusion.
+- technical-analysis: an isolated deterministic technical lane in a broader report; narrow technical-only requests should call technical_analysis directly in the main agent.
+- analysis: one standardized company evidence lane in a multi-company comparison, or a tightly bounded dense multi-year evidence packet; never the complete ordinary single-company report.
+- general-purpose: only when no specialized type applies; never use it to bypass research, analysis, or technical-analysis for company, stock, market, or technical work.
 
 ## Subagent Types
 
@@ -104,7 +111,7 @@ export function resolveSubagentReasoningEffort(typeKey: string): DeepSeekReasoni
 export function createSpawnSubagent(model: string): DynamicStructuredTool {
   return new DynamicStructuredTool({
     name: 'spawn_subagent',
-    description: 'Delegate a focused sub-task to an isolated subagent (see system prompt for details).',
+    description: SPAWN_SUBAGENT_DESCRIPTION,
     schema: SpawnSubagentInputSchema,
     func: async (input, _runManager, config?: RunnableConfig) => {
       const onProgress = config?.metadata?.onProgress as ((msg: string) => void) | undefined;

@@ -67,5 +67,9 @@ describe('skill registry', () => {
     expect(loaded?.instructions).toContain('Do not invent an arbitrary intraday price threshold');
     expect(loaded?.instructions).toContain('technical_analysis.decision_context');
     expect(loaded?.instructions).toContain('Pre-Publication Check');
+    expect(loaded?.instructions).toContain('The main agent retains the `stock-analysis` skill');
+    expect(loaded?.instructions).toContain('`research` may handle a clearly isolated multi-step current-information lane');
+    expect(loaded?.instructions).toContain('`technical-analysis` may handle a clearly isolated deterministic technical lane');
+    expect(loaded?.instructions).toContain('Never delegate the complete ordinary single-company analysis to `analysis` or `general-purpose`');
   });
 });

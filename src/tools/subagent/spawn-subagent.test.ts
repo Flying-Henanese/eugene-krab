@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { resolveSubagentModel, resolveSubagentReasoningEffort } from './spawn-subagent.js';
+import { createSpawnSubagent, resolveSubagentModel, resolveSubagentReasoningEffort } from './spawn-subagent.js';
 import { resolveSubagentTools, SUBAGENT_TYPES, SUBAGENT_TYPE_NAMES } from './types.js';
 
 const originalSubagentModel = process.env.SUBAGENT_MODEL;
@@ -98,7 +98,7 @@ describe('resolveSubagentTools', () => {
 
     const analysisPrompt = SUBAGENT_TYPES.analysis.systemPrompt;
     expect(SUBAGENT_TYPES.analysis.whenToUse).toContain('multi-company comparison');
-    expect(SUBAGENT_TYPES.analysis.whenToUse).toContain('Ordinary one-company analysis stays in the main agent');
+    expect(SUBAGENT_TYPES.analysis.whenToUse).toContain('Ordinary one-company analysis and synthesis stay in the main agent');
     expect(analysisPrompt).toContain('n_income_attr_p');
     expect(analysisPrompt).toContain('update_flag=1');
     expect(analysisPrompt).toContain('financial_calculator');
@@ -126,5 +126,65 @@ describe('resolveSubagentTools', () => {
     expect(technicalPrompt).toContain('decision-relevant context');
     expect(technicalPrompt).toContain('T+5 is not a validated predictive horizon');
     expect(technicalPrompt).not.toContain('actual positions');
+  });
+});
+
+describe('prompt-visible subagent routing boundaries', () => {
+  test('binds the detailed type-aware description to the actual tool', () => {
+    const description = createSpawnSubagent('gpt-5.5').description;
+
+    expect(description).toContain('## Financial Routing');
+    expect(description).toContain('research: an isolated multi-step current-information lane');
+    expect(description).toContain('technical-analysis: an isolated deterministic technical lane');
+    expect(description).toContain('analysis: one standardized company evidence lane');
+    expect(description).toContain('general-purpose: only when no specialized type applies');
+    expect(description).toContain('runs in isolation');
+    expect(description).toContain('cannot delegate further');
+  });
+
+  test('keeps each type within its financial routing boundary', () => {
+    expect(SUBAGENT_TYPES['general-purpose'].whenToUse).toContain(
+      'Specialized financial subagent types take precedence',
+    );
+    expect(SUBAGENT_TYPES['general-purpose'].systemPrompt).toContain(
+      'Do not widen the assigned task',
+    );
+
+    expect(SUBAGENT_TYPES.research.whenToUse).toContain(
+      'isolated multi-step current-information lane',
+    );
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain('material dates and attribution');
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain('include URLs where available');
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain(
+      'Do not produce a final company-level investment conclusion',
+    );
+
+    expect(SUBAGENT_TYPES.analysis.whenToUse).toContain(
+      'Ordinary one-company analysis and synthesis stay in the main agent',
+    );
+    expect(SUBAGENT_TYPES.analysis.systemPrompt).toContain(
+      'Never complete the whole ordinary single-company analysis',
+    );
+    expect(SUBAGENT_TYPES.analysis.systemPrompt).toContain(
+      'exact parent-provided periods, metrics, units, currency, scope, evidence rules, and output structure',
+    );
+
+    expect(SUBAGENT_TYPES['technical-analysis'].whenToUse).toContain(
+      'inside a broader company report',
+    );
+    expect(SUBAGENT_TYPES['technical-analysis'].whenToUse).toContain(
+      'Narrow technical-only requests should call technical_analysis directly',
+    );
+    expect(SUBAGENT_TYPES['technical-analysis'].systemPrompt).toContain(
+      'never take responsibility for final cross-lane synthesis',
+    );
+  });
+
+  test('never exposes recursive delegation or interactive questions to subagents', () => {
+    for (const type of SUBAGENT_TYPE_NAMES) {
+      const tools = resolveSubagentTools(type);
+      expect(tools).not.toContain('spawn_subagent');
+      expect(tools).not.toContain('ask_user_question');
+    }
   });
 });

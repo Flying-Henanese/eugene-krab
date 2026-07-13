@@ -17,15 +17,16 @@ Apply these rules before all style or completeness preferences:
 4. Use one of the six Chinese Combined Interpretation labels verbatim. Do not decorate or replace it with a custom headline. Valuation multiples, dividends, repurchases, or brokerage forecasts are not evidence that fundamentals are improving.
 5. Never use transaction or promotional conclusions, including “价值洼地”, “黎明信号”, “反转”, “硬底”, “回报下限”, “价值信号”, “安全边际”, “追高”, “性价比”, or claims that management believes intrinsic value exceeds the price unless a primary source states that exact claim.
 6. Omit a claim rather than filling a missing source, period, unit, scope, or field meaning with an inference.
-7. Keep ordinary one-company financial analysis in the main agent so this skill's rules remain available during synthesis. Use an `analysis` subagent only for a multi-company comparison lane or unusually dense multi-year statement work.
+7. The main agent retains the `stock-analysis` skill, structured fundamentals, material arithmetic verification, evidence reconciliation, pre-publication review, and final synthesis. Never delegate the complete ordinary single-company analysis to `analysis` or `general-purpose`. In a broad multi-lane report, `research` may handle a clearly isolated multi-step current-information lane and `technical-analysis` may handle a clearly isolated deterministic technical lane.
 8. Treat Tushare `free_cashflow` as a separate upstream field. Never define it as operating cash flow minus capital expenditure; use `operating_cashflow_less_capex` for the deterministic `n_cashflow_act - c_pay_acq_const_fiolta` value and label both explicitly if both are shown.
+9. Reject or repair an auxiliary result that lacks material dates, periods, units, scope, attribution, URLs, technical metadata, conflicting evidence, or limitations. An auxiliary worker never owns the Combined Interpretation or final company-level conclusion.
 
 ## Workflow
 
 1. Resolve one company and ticker. State ambiguity or unsupported scope instead of guessing.
-2. Call `a_share_analysis` for the latest structured market snapshot, multi-period financial statements, valuation, profitability, cash flow, balance-sheet evidence, business composition, audit result, dividends, forecasts, and express reports. Preserve the distinction between group net profit (`n_income`) and attributable net profit (`n_income_attr_p`). Prefer this structured evidence over annual-report PDF parsing for ordinary financial analysis. Use updated statement versions and retain like-for-like comparison periods.
-3. Call `technical_analysis` for the same ticker. Treat its public structured result as the only source of technical indicators, periods, state labels, observations, and structural changes; never recalculate or relabel them in prose.
-4. Call `web_search` for recent company announcements, financial disclosures, operating data, and material industry context. Prefer primary sources in this order:
+2. In the main agent, call `a_share_analysis` for the latest structured market snapshot, multi-period financial statements, valuation, profitability, cash flow, balance-sheet evidence, business composition, audit result, dividends, forecasts, and express reports. Preserve the distinction between group net profit (`n_income`) and attributable net profit (`n_income_attr_p`). Prefer this structured evidence over annual-report PDF parsing for ordinary financial analysis. Use updated statement versions and retain like-for-like comparison periods.
+3. Obtain the technical lane for the same ticker. A direct main-agent `technical_analysis` call remains valid and is required for a narrow technical-only request. In a broad multi-lane report, the main agent may instead delegate a clearly isolated lane to `technical-analysis` only when the task supplies the ticker, non-default adjustment if any, requested horizons, role in the parent report, excluded scope, and required output metadata. Treat the public structured result as the only source of technical indicators, periods, state labels, observations, and structural changes; never recalculate or relabel them in prose.
+4. Obtain recent company announcements, financial disclosures, operating data, and material industry context. A direct main-agent `web_search` call remains valid for a simple lane. For an independent multi-step lane in a broad report, the main agent may delegate to `research` only when the task supplies the object or ticker, period, topics, source priority, required URLs, excluded scope, and evidence-packet shape. Prefer primary sources in this order:
    - exchange or regulator disclosure;
    - company announcement, investor-relations page, or official statement;
    - authoritative industry data;
@@ -34,7 +35,7 @@ Apply these rules before all style or completeness preferences:
    - forums, social posts, aggregators, and commentary sites.
 5. Use low-priority sources only to discover leads. Do not let promotional headlines, forum opinions, target prices, or brokerage forecasts become the assistant's own conclusion. Omit a material claim that is available only from a forum, social post, aggregator, or commentary site. A brokerage forecast may appear only in a separate, explicitly attributed third-party-view subsection and never as supporting evidence for the combined state.
 6. Use `web_fetch` when a search snippet is insufficient to establish the period, unit, scope, attribution, or exact wording of a material claim.
-7. Synthesize only after all three lanes are available or their limitations have been stated.
+7. Inspect every direct or delegated lane before synthesis. Reject or repair missing dates, periods, units, scope, attribution, URLs, technical metadata, conflicting evidence, or limitations. Synthesize only after all three lanes are available or their limitations have been stated.
 8. Call `financial_calculator` before drafting whenever a material number requires unit conversion, comparison, or percentage-change arithmetic. At minimum, convert Tushare `total_mv` and `circ_mv` from `cny_10k` to `cny_100m`; use the returned result exactly. Do not annualize a reported-period ROE with this tool.
 
 ## Evidence Discipline
@@ -111,4 +112,5 @@ Before answering, revise the draft if any check fails:
 - Core claims use primary sources where available; low-priority commentary does not drive the conclusion.
 - Every material web claim has a displayed URL; otherwise it is omitted.
 - Both supporting and conflicting evidence are present when the evidence is mixed.
+- Any auxiliary `research` or `technical-analysis` packet has been checked and repaired as needed; the main agent still owns evidence reconciliation and final synthesis.
 - No sentence implies a validated future direction, personalized action, price floor, or guaranteed valuation convergence.

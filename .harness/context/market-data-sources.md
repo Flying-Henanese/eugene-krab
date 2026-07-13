@@ -45,6 +45,17 @@ Use the dedicated subagent mainly as one isolated lane of a broader fundamental/
 
 For a broad request about one A-share that does not specify a single research lane, use the `stock-analysis` skill in the main agent to combine Tushare fundamentals, recent public information, and the neutral `technical_analysis` result. The skill must preserve source type, date/period, unit, currency, and scope; use `n_income_attr_p` rather than group `n_income` when labeling attributable net profit; use `financial_calculator` for material conversions or arithmetic; prioritize exchange/company disclosures; keep brokerage or media views separate; and describe evidence as aligned, conflicting, incomplete, or insufficient rather than generating a transaction thesis. Explicitly narrow requests continue to use their corresponding tool or skill and must not be widened automatically. Use `analysis` subagents for one-company lanes inside multi-company comparisons or unusually dense multi-year statement work, not as a required step for an ordinary single-company report.
 
+## Single-Company Subagent Routing
+
+For a broad single-company report, the main agent retains the stock-analysis skill, a_share_analysis structured fundamentals, material financial_calculator checks, cross-lane evidence reconciliation, pre-publication review, and the final company-level synthesis.
+
+- A direct web_search remains valid for a simple current-information lane. An isolated multi-step lane may instead use research when the parent task fixes the ticker/object, period, topics, source priority, required URLs, exclusions, and evidence-packet shape.
+- A direct technical_analysis call remains valid and is required for a narrow technical-only request. An isolated technical lane inside a broad report may instead use technical-analysis when the parent fixes the ticker, adjustment, horizons, report role, exclusions, and required technical metadata.
+- analysis is limited to identical one-company evidence lanes in a multi-company comparison or a tightly bounded dense multi-year evidence packet. It does not perform a complete ordinary single-company analysis.
+- general-purpose must not act as a financial fallback when research, analysis, or technical-analysis applies.
+
+Auxiliary results must preserve dates or periods, units, scope, attribution, URLs where available, conflicting evidence, technical metadata, and limitations. The main agent rejects or repairs incomplete packets before synthesis. These boundaries are implemented in src/agent/prompts.ts, src/tools/subagent/spawn-subagent.ts, src/tools/subagent/types.ts, and src/skills/stock-analysis/SKILL.md.
+
 Treat a five-trading-session window only as a review cadence for short-term daily momentum, Bollinger-band contacts, and recent structural changes. Historical testing has not established T+5 predictive validity. MA20/MA60 alignment and 20/60-day returns describe a medium-term background with no fixed T+N expiry; update the interpretation when the observed state changes.
 
 Do not use this capability for intraday data, real-time execution, US/global equities, fundamental valuation, or news causality. Exact chart-platform parity must not be claimed until a golden fixture settles standard-deviation, KDJ initialization, `FILTER`, and `EXIST` boundary semantics.

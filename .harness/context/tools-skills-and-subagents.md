@@ -56,9 +56,17 @@ Model policy:
 - `DEEPSEEK_SUBAGENT_REASONING_EFFORT` controls DeepSeek subagent reasoning effort.
 - `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT` overrides reasoning effort only for analysis subagents; it falls back to the general subagent setting and then the main DeepSeek setting.
 
-Keep ordinary one-company analysis in the main agent so the loaded skill, user rules, and source context remain available during final synthesis. Use `analysis` subagents for independent company lanes in a multi-company comparison or dense multi-year statement work; give each comparison worker identical periods, metrics, units, and evidence rules, and let the main agent perform the cross-company comparison. The analysis worker calls `a_share_analysis` exactly once, groups material calculator work into one call, and uses at most one web search for explicitly requested current context. The main agent must then perform a like-for-like evidence review rather than concatenating worker conclusions. The analysis worker uses structured Tushare statements for ordinary A-share financial analysis and does not require annual-report PDF parsing.
+The routing contract remains model-driven; no deterministic classifier or gateway keyword branch decides when to spawn. Its prompt-visible sources are src/agent/prompts.ts, the bound description in src/tools/subagent/spawn-subagent.ts, and the type metadata and worker prompts in src/tools/subagent/types.ts. The stock-analysis orchestration boundary is also encoded in src/skills/stock-analysis/SKILL.md.
 
-The dedicated `technical-analysis` subagent is intended for an isolated technical lane inside a broader report. It calls the same deterministic `technical_analysis` tool available to the main agent and skill. It intentionally follows the normal fast-model policy; only the existing `analysis` type receives `SUBAGENT_ANALYSIS_MODEL`.
+- Main agent only: ordinary single-company structured fundamentals, loading and applying stock-analysis, material arithmetic review, evidence reconciliation, pre-publication review, and final synthesis. Simple or narrow single-tool requests also stay direct.
+- research: an optional isolated multi-step current-information lane inside a broad report. The parent supplies object/ticker, period, topics, source priority, required URLs, exclusions, and output shape; the worker returns dated and attributed evidence, conflicts, and limitations rather than a company conclusion.
+- technical-analysis: an optional isolated deterministic technical lane inside a broad report. The parent supplies ticker, adjustment, horizons, report role, and exclusions. Narrow technical-only requests call technical_analysis directly.
+- analysis: one standardized company evidence lane in a multi-company comparison, or a tightly bounded dense multi-year evidence packet. It never owns the complete ordinary single-company report.
+- general-purpose: only when no specialized type applies. It must not bypass research, analysis, or technical-analysis for company, stock, market, or technical work.
+
+For comparison lanes, give every analysis worker identical periods, metrics, units, currency, scope, evidence rules, and output structure, then perform a like-for-like review in the main agent. The analysis worker calls a_share_analysis exactly once, groups material calculator work into one call, and uses at most one web search for explicitly requested current context. It returns an evidence packet, not a final company-level conclusion, and ordinary A-share work does not require annual-report PDF parsing.
+
+The technical-analysis worker explains the same neutral public technical result used by the direct tool and skill. It uses the normal fast-model policy; only the analysis type receives SUBAGENT_ANALYSIS_MODEL.
 
 Subagent tool access is controlled by subagent type definitions under `src/tools/subagent/`.
 
