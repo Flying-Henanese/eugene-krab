@@ -2,6 +2,7 @@ import type { GroupContext } from './prompts.js';
 import type { MessageQueue } from '../utils/message-queue.js';
 import type { Question, UserAnswers } from '../tools/ask-user-question/types.js';
 import type { DeepSeekReasoningEffort } from '../model/llm.js';
+import type { ToolExecutionBudgetConfig } from './tool-budget.js';
 
 // ============================================================================
 // Channel Profiles
@@ -77,6 +78,10 @@ export interface AgentConfig {
   agentLabel?: string;
   /** Optional DeepSeek reasoning effort override for this agent run. */
   reasoningEffort?: DeepSeekReasoningEffort;
+  /** Optional hard execution budget. Disabled for ordinary agents by default. */
+  toolExecutionBudget?: ToolExecutionBudgetConfig;
+  /** Reserve the final allowed iteration for a tool-free synthesis call. */
+  reserveFinalIteration?: boolean;
 }
 
 /**
@@ -153,8 +158,10 @@ export interface ToolLimitEvent {
   tool: string;
   /** Warning message about tool usage limits */
   warning?: string;
-  /** Whether the tool call was blocked (always false - we only warn, never block) */
+  /** Whether an opt-in hard execution budget blocked the call. */
   blocked: boolean;
+  /** Unique tool_call ID when the event applies to a specific blocked call. */
+  toolCallId?: string;
 }
 
 /**

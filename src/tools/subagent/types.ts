@@ -8,6 +8,8 @@
  * and returns a single answer.
  */
 
+import type { ToolExecutionBudgetConfig } from '../../agent/tool-budget.js';
+
 /** Configuration for one subagent type. */
 export interface SubagentTypeConfig {
   /** Help text shown to the leader so it knows when to pick this type. */
@@ -18,6 +20,10 @@ export interface SubagentTypeConfig {
   tools: string[];
   /** Maximum agent loop iterations for the subagent. */
   maxIterations: number;
+  /** Optional hard tool-execution budget for this worker type. */
+  toolExecutionBudget?: ToolExecutionBudgetConfig;
+  /** Reserve the final iteration for tool-free synthesis. */
+  reserveFinalIteration?: boolean;
 }
 
 /**
@@ -65,9 +71,20 @@ export const SUBAGENT_TYPES: Record<string, SubagentTypeConfig> = {
   },
   research: {
     whenToUse: 'Gather and synthesize external information on one topic, including an isolated multi-step current-information lane inside a broader company report.',
-    systemPrompt: `${WORKER_PREAMBLE}\n\nYou are a research worker. Gather information from the web, news, and filings, cross-check sources, and return a sourced evidence packet for the assigned topic. For a company-report lane, follow the parent-provided object or ticker, period, topics, source priority, excluded scope, and output shape. Separate company or regulator disclosures, other primary sources, reputable media, and third-party views. State material dates and attribution, include URLs where available, surface conflicting evidence and missing information, and explain source limitations. Do not produce a final company-level investment conclusion, recommendation, target price, or cross-lane synthesis.`,
+    systemPrompt: `${WORKER_PREAMBLE}\n\nYou are a research worker. Gather information from the web, news, and filings, cross-check sources, and return a sourced evidence packet for the assigned topic. For a company-report lane, follow the parent-provided object or ticker, period, prioritized topics, source priority, excluded scope, and output shape. Prioritize at most five material findings instead of exhaustively covering every possible subtopic. Combine related topics into broad search queries. Use no more than three web_search calls and two web_fetch calls; prefer primary sources and fetch only the most material URLs. Stop when the execution budget is reached, never retry a call rejected by the execution budget, and return partial evidence plus explicit missing information and limitations instead of continuing to search. Separate company or regulator disclosures, other primary sources, reputable media, and third-party views. State material dates and attribution, include URLs where available, surface conflicting evidence and missing information, and explain source limitations. Do not produce a final company-level investment conclusion, recommendation, target price, or cross-lane synthesis.`,
     tools: ['web_search', 'x_search', 'web_fetch', 'read_filings', 'get_market_data'],
     maxIterations: 8,
+    toolExecutionBudget: {
+      maxTotalExecutions: 6,
+      perTool: {
+        web_search: 3,
+        web_fetch: 2,
+        x_search: 1,
+        read_filings: 1,
+        get_market_data: 1,
+      },
+    },
+    reserveFinalIteration: true,
   },
   analysis: {
     whenToUse: 'One standardized company evidence lane in a multi-company comparison, or a tightly bounded dense multi-year quantitative financial evidence packet. Ordinary one-company analysis and synthesis stay in the main agent.',

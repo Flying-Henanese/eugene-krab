@@ -70,6 +70,22 @@ The technical-analysis worker explains the same neutral public technical result 
 
 Subagent tool access is controlled by subagent type definitions under `src/tools/subagent/`.
 
+### Research execution budget
+
+Scratchpad tool limits remain global soft warnings: `Scratchpad.canCallTool()` still allows a call after the suggested per-tool count and records an advisory warning. Do not turn that mechanism into a global hard limit.
+
+Phase 1 adds a separate per-run hard execution budget only for the `research` worker:
+
+- at most 6 total executions;
+- `web_search`: 3;
+- `web_fetch`: 2;
+- `x_search`, `read_filings`, and `get_market_data`: 1 each;
+- tools without an explicit per-tool entry remain allowed subject to the total limit.
+
+`ToolExecutionBudget.reserve()` checks and increments synchronously after approval handling and before the executor's first `tool_start` yield. This ordering prevents concurrent calls in one model response from oversubscribing the budget. A rejected call never invokes the underlying tool or increments Scratchpad's executed-call count. It emits `tool_limit` with `blocked: true`, emits a matching `tool_error` with the original tool-call ID, and persists an error-style `tool_result` in the scratchpad for audit.
+
+When the total budget is consumed, or a turn contains only budget-rejected calls, the next research model call is forced to use an empty tool list and receives an instruction to synthesize the evidence already collected with dates, attribution, URLs, conflicts, missing information, and limitations. The eighth and final research iteration is also tool-free even when the explicit budget has not been consumed. Mixed allowed/rejected batches do not force immediate finalization while total budget remains, so the worker can still fetch a selected URL on the next turn. `general-purpose`, `analysis`, `technical-analysis`, and the main agent retain their existing iteration and tool policies.
+
 ## Change Guidance
 
 - When adding a tool, update the rich description and compact description together.

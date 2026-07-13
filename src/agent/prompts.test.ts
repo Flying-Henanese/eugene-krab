@@ -18,6 +18,9 @@ describe('buildSystemPrompt subagent routing policy', () => {
       'a clearly isolated deterministic technical lane to technical-analysis',
     );
     expect(prompt).toContain(
+      'a prioritized list of no more than five material topics rather than an exhaustive completeness checklist',
+    );
+    expect(prompt).toContain(
       'Use analysis only for one standardized company lane in a multi-company comparison',
     );
     expect(prompt).toContain(

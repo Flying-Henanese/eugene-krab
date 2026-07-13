@@ -56,7 +56,7 @@ The subagent runs in isolation — it cannot see this conversation and cannot de
 
 ## Financial Routing
 
-- research: an isolated multi-step current-information lane in a broader company report; require dated, attributed facts, URLs, conflicts, and limitations rather than a company-level investment conclusion.
+- research: an isolated multi-step current-information lane in a broader company report; request at most five prioritized material findings rather than exhaustive coverage, and require dated, attributed facts, URLs, conflicts, and limitations rather than a company-level investment conclusion.
 - technical-analysis: an isolated deterministic technical lane in a broader report; narrow technical-only requests should call technical_analysis directly in the main agent.
 - analysis: one standardized company evidence lane in a multi-company comparison, or a tightly bounded dense multi-year evidence packet; never the complete ordinary single-company report.
 - general-purpose: only when no specialized type applies; never use it to bypass research, analysis, or technical-analysis for company, stock, market, or technical work.
@@ -136,6 +136,8 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
         systemPromptOverride: typeCfg.systemPrompt,
         agentLabel: typeKey,
         reasoningEffort,
+        toolExecutionBudget: typeCfg.toolExecutionBudget,
+        reserveFinalIteration: typeCfg.reserveFinalIteration,
         // Read-only subagents: no approval plumbing needed in v1.
       });
 

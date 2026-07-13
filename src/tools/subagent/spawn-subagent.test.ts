@@ -135,6 +135,7 @@ describe('prompt-visible subagent routing boundaries', () => {
 
     expect(description).toContain('## Financial Routing');
     expect(description).toContain('research: an isolated multi-step current-information lane');
+    expect(description).toContain('at most five prioritized material findings rather than exhaustive coverage');
     expect(description).toContain('technical-analysis: an isolated deterministic technical lane');
     expect(description).toContain('analysis: one standardized company evidence lane');
     expect(description).toContain('general-purpose: only when no specialized type applies');
@@ -155,6 +156,26 @@ describe('prompt-visible subagent routing boundaries', () => {
     );
     expect(SUBAGENT_TYPES.research.systemPrompt).toContain('material dates and attribution');
     expect(SUBAGENT_TYPES.research.systemPrompt).toContain('include URLs where available');
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain('at most five material findings');
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain('no more than three web_search calls and two web_fetch calls');
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain('never retry a call rejected by the execution budget');
+    expect(SUBAGENT_TYPES.research.systemPrompt).toContain('return partial evidence plus explicit missing information and limitations');
+    expect(SUBAGENT_TYPES.research.maxIterations).toBe(8);
+    expect(SUBAGENT_TYPES.research.toolExecutionBudget).toEqual({
+      maxTotalExecutions: 6,
+      perTool: {
+        web_search: 3,
+        web_fetch: 2,
+        x_search: 1,
+        read_filings: 1,
+        get_market_data: 1,
+      },
+    });
+    expect(SUBAGENT_TYPES.research.reserveFinalIteration).toBe(true);
+    for (const type of ['general-purpose', 'analysis', 'technical-analysis']) {
+      expect(SUBAGENT_TYPES[type].toolExecutionBudget).toBeUndefined();
+      expect(SUBAGENT_TYPES[type].reserveFinalIteration).toBeUndefined();
+    }
     expect(SUBAGENT_TYPES.research.systemPrompt).toContain(
       'Do not produce a final company-level investment conclusion',
     );

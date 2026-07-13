@@ -15,6 +15,11 @@ import { compactContext, MAX_CONSECUTIVE_COMPACTION_FAILURES, MIN_TOOL_RESULTS_F
 import { microcompactMessages } from './microcompact.js';
 import { createRunContext, type RunContext } from './run-context.js';
 import { AgentToolExecutor } from './tool-executor.js';
+import {
+  RESEARCH_FINALIZATION_INSTRUCTION,
+  selectToolsForIteration,
+  shouldScheduleFinalization,
+} from './agent-finalization.js';
 import { MemoryManager } from '../memory/index.js';
 import { runMemoryFlush, shouldRunMemoryFlush } from '../memory/flush.js';
 import { resolveProvider } from '../providers.js';
@@ -48,6 +53,8 @@ export class Agent {
   private readonly memoryEnabled: boolean;
   private readonly messageQueue?: MessageQueue;
   private readonly reasoningEffort?: AgentConfig['reasoningEffort'];
+  private readonly toolExecutionBudget?: AgentConfig['toolExecutionBudget'];
+  private readonly reserveFinalIteration: boolean;
   private compactionFailures: number = 0;
 
   private constructor(
@@ -74,6 +81,9 @@ export class Agent {
     this.memoryEnabled = config.memoryEnabled ?? true;
     this.messageQueue = config.messageQueue;
     this.reasoningEffort = config.reasoningEffort;
+    this.toolExecutionBudget = config.toolExecutionBudget;
+    this.reserveFinalIteration =
+      config.reserveFinalIteration ?? config.toolExecutionBudget?.reserveFinalIteration ?? false;
   }
 
   static async create(config: AgentConfig = {}): Promise<Agent> {
@@ -135,7 +145,10 @@ export class Agent {
       return;
     }
 
-    const ctx = createRunContext(query);
+    const ctx = createRunContext(query, {
+      toolExecutionBudget: this.toolExecutionBudget,
+      reserveFinalIteration: this.reserveFinalIteration,
+    });
     const memoryFlushState = { alreadyFlushed: false };
 
     // Build initial message array
@@ -150,6 +163,19 @@ export class Agent {
     let overflowRetries = 0;
     while (ctx.iteration < this.maxIterations) {
       ctx.iteration++;
+
+      if (ctx.finalizationScheduled && !ctx.finalizationInstructionAppended) {
+        messages.push(new HumanMessage(RESEARCH_FINALIZATION_INSTRUCTION));
+        ctx.finalizationInstructionAppended = true;
+      }
+
+      const toolsForCall = selectToolsForIteration(
+        this.tools,
+        ctx.iteration,
+        this.maxIterations,
+        ctx.reserveFinalIteration,
+        ctx.finalizationScheduled,
+      );
 
       // Microcompact: per-turn lightweight trimming before LLM call
       const mcResult = microcompactMessages(messages);
@@ -167,7 +193,7 @@ export class Agent {
       // Call LLM with streaming (falls back to blocking on error)
       while (true) {
         try {
-          const result = yield* this.callModelWithStreaming(messages);
+          const result = yield* this.callModelWithStreaming(messages, toolsForCall);
           response = result.response;
           usage = result.usage;
           overflowRetries = 0;
@@ -223,7 +249,13 @@ export class Agent {
       messages.push(response);
 
       // Execute tools concurrently where safe, collect ToolMessages by ID
-      let { toolMessages, denied } = yield* this.executeToolsAndCollectMessages(response, ctx);
+      let {
+        toolMessages,
+        denied,
+        executedCount,
+        budgetRejectedCount,
+        totalBudgetExhausted,
+      } = yield* this.executeToolsAndCollectMessages(response, ctx);
 
       // Cap large results (persist to disk, inject preview)
       toolMessages = toolMessages.map(tm => {
@@ -256,6 +288,14 @@ export class Agent {
           tokensPerSecond: ctx.tokenCounter.getTokensPerSecond(totalTime),
         };
         return;
+      }
+
+      if (shouldScheduleFinalization({
+        executedCount,
+        budgetRejectedCount,
+        totalBudgetExhausted,
+      })) {
+        ctx.finalizationScheduled = true;
       }
 
       // Context threshold management (may compact the message array)
@@ -300,12 +340,13 @@ export class Agent {
    */
   private async *callModelWithStreaming(
     messages: BaseMessage[],
+    tools: StructuredToolInterface[],
   ): AsyncGenerator<StreamProgressEvent, { response: AIMessage; usage?: TokenUsage }> {
     try {
-      return yield* this.streamAndAccumulate(messages);
+      return yield* this.streamAndAccumulate(messages, tools);
     } catch {
       // Fallback to blocking invoke (handles providers without streaming support)
-      return await this.callModelWithMessages(messages);
+      return await this.callModelWithMessages(messages, tools);
     }
   }
 
@@ -318,6 +359,7 @@ export class Agent {
    */
   private async *streamAndAccumulate(
     messages: BaseMessage[],
+    tools: StructuredToolInterface[],
   ): AsyncGenerator<StreamProgressEvent, { response: AIMessage; usage?: TokenUsage }> {
     yield { type: 'stream_progress', charDelta: 0, mode: 'requesting' };
 
@@ -325,7 +367,7 @@ export class Agent {
 
     for await (const chunk of streamLlmWithMessages(messages, {
       model: this.model,
-      tools: this.tools,
+      tools,
       signal: this.signal,
       reasoningEffort: this.reasoningEffort,
     })) {
@@ -368,10 +410,11 @@ export class Agent {
    */
   private async callModelWithMessages(
     messages: BaseMessage[],
+    tools: StructuredToolInterface[],
   ): Promise<{ response: AIMessage; usage?: TokenUsage }> {
     const result = await callLlmWithMessages(messages, {
       model: this.model,
-      tools: this.tools,
+      tools,
       signal: this.signal,
       reasoningEffort: this.reasoningEffort,
     });
@@ -389,13 +432,27 @@ export class Agent {
   private async *executeToolsAndCollectMessages(
     response: AIMessage,
     ctx: RunContext,
-  ): AsyncGenerator<AgentEvent, { toolMessages: ToolMessage[]; denied: boolean }> {
+  ): AsyncGenerator<AgentEvent, {
+    toolMessages: ToolMessage[];
+    denied: boolean;
+    executedCount: number;
+    budgetRejectedCount: number;
+    totalBudgetExhausted: boolean;
+  }> {
     const toolMessageMap = new Map<string, ToolMessage>();
     let denied = false;
+    let executedCount = 0;
+    let budgetRejectedCount = 0;
     const toolCalls = response.tool_calls!;
 
     for await (const event of this.toolExecutor.executeAll(response, ctx)) {
       yield event;
+
+      if (event.type === 'tool_start') {
+        executedCount++;
+      } else if (event.type === 'tool_limit' && event.blocked) {
+        budgetRejectedCount++;
+      }
 
       if (event.type === 'tool_end' && event.toolCallId) {
         toolMessageMap.set(event.toolCallId, new ToolMessage({
@@ -428,7 +485,13 @@ export class Agent {
       }),
     );
 
-    return { toolMessages, denied };
+    return {
+      toolMessages,
+      denied,
+      executedCount,
+      budgetRejectedCount,
+      totalBudgetExhausted: ctx.toolBudget?.isTotalExhausted() ?? false,
+    };
   }
 
   // ---------------------------------------------------------------------------

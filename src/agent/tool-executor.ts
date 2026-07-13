@@ -148,6 +148,24 @@ export class AgentToolExecutor {
       }
     }
 
+    // Hard budget reservation must happen before the first yield. Concurrent
+    // generators are advanced to their first yield in order, so this prevents
+    // an oversized batch from observing the same stale counters.
+    const reservation = ctx.toolBudget?.reserve(toolName);
+    if (reservation && !reservation.allowed) {
+      const message = reservation.message!;
+      yield {
+        type: 'tool_limit',
+        tool: toolName,
+        warning: message,
+        blocked: true,
+        toolCallId,
+      };
+      yield { type: 'tool_error', tool: toolName, error: message, toolCallId };
+      ctx.scratchpad.addToolResult(toolName, toolArgs, `Error: ${message}`);
+      return;
+    }
+
     // Tool limit check (warn but never block)
     const limitCheck = ctx.scratchpad.canCallTool(toolName, toolQuery);
     if (limitCheck.warning) {
