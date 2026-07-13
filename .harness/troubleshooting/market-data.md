@@ -15,7 +15,15 @@
 
 ## Partial Tushare Data
 
-Tushare permission failures may affect only some endpoints. Preserve usable partial data where the tool supports it, and clearly explain missing fields.
+Tushare permission failures may affect only some endpoints. `a_share_analysis` should preserve its core statement result when supplemental APIs such as `fina_mainbz`, `fina_audit`, `dividend`, `forecast`, or `express` fail, and report those failures through `unavailable_data`.
+
+## Financial Numbers Do Not Match
+
+Check period, unit, currency, and scope before changing formulas. Tushare `daily_basic.total_mv` and `circ_mv` use ten-thousand CNY units, while financial-statement monetary fields use CNY. Use `financial_calculator` for material conversions and arithmetic. Keep upstream `free_cashflow` separate from the locally derived `operating_cashflow_less_capex`.
+
+## Technical Output Exposes Buy/Sell Fields
+
+The registered `technical_analysis` tool must return `toPublicTechnicalAnalysisResult(runTechnicalAnalysis(...))`. Raw formula sides, position actions, strategy parameters, and applicability decisions belong only to tests and offline research. If they appear in CLI, Feishu, a skill, or a subagent response, inspect the adapter boundary before changing prompt wording.
 
 ## Wrong Data Source
 

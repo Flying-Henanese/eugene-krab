@@ -1,10 +1,11 @@
 # Repository Guidelines
 
-- Repo: https://github.com/virattt/dexter
-- Dexter is a CLI-based AI agent for deep financial research, built with TypeScript, Ink (React for CLI), and LangChain.
+- Repo: https://github.com/Flying-Henanese/eugene-krab
+- Upstream project: https://github.com/virattt/dexter
+- Eugene Krab is a fork of Dexter, a CLI-based AI agent for deep financial research built with TypeScript, Ink (React for CLI), and LangChain. This fork adds chat gateways, persistent workflows, and China A-share research capabilities.
 - For nontrivial repo work, read `.harness/README.md` after this file and follow its task routing to the smallest relevant context/checklist files. Treat `AGENTS.md` as the root map and `.harness/` as the repo-local operating manual.
 - Before implementing Feishu support, read `docs/superpowers/specs/2026-07-01-feishu-wsclient-design.md`. It captures the agreed scope: Feishu WSClient long connection, one-on-one text chats only, credentials in `.env`, no project-local allowlist for the first version.
-- Before implementing A-share analysis with Tushare and Tavily, read `docs/superpowers/specs/2026-07-02-tushare-tavily-stock-analysis-design.md`. It captures the agreed scope: Tushare for A-share structured data, Tavily/web_search for current Chinese market context, and Financial Datasets retained for US/global equities. For the current technical-analysis implementation, use `.harness/context/market-data-sources.md` and `.harness/context/tools-skills-and-subagents.md` as the working source of truth.
+- Before implementing A-share analysis with Tushare and Tavily, read `docs/superpowers/specs/2026-07-02-tushare-tavily-stock-analysis-design.md`. It captures the initial source split: Tushare for A-share structured data, Tavily/web_search for current Chinese market context, and Financial Datasets retained for US/global equities. For the current single-stock workflow, neutral technical-assessment boundary, deterministic calculations, and subagent policy, use `.harness/context/market-data-sources.md` and `.harness/context/tools-skills-and-subagents.md` as the working source of truth.
 
 ## Harness Context Routing
 
@@ -28,7 +29,8 @@
   - Model/LLM: `src/model/llm.ts` (multi-provider LLM abstraction)
   - Provider metadata: `src/providers.ts` (provider IDs, model prefixes, fast models, context windows)
   - Tools: `src/tools/` (finance, search, browser, fetch, filesystem, subagent, memory, cron, heartbeat, skill)
-  - Finance tools: `src/tools/finance/` (financials, market data, filings, screeners, Tushare A-share analysis, market sentiment, and deterministic technical analysis)
+  - Finance tools: `src/tools/finance/` (financials, market data, filings, screeners, deterministic financial arithmetic, Tushare A-share analysis, market sentiment, and technical analysis)
+  - A-share technical internals: `src/tools/finance/technical-analysis/` (data collection, indicators, raw research events, neutral public assessment, and offline applicability research)
   - Search tools: `src/tools/search/` (Exa, Perplexity, Tavily, LangSearch, X search)
   - Browser/fetch: `src/tools/browser/`, `src/tools/fetch/` (Playwright browser and URL fetch/summarization)
   - Skills: `src/skills/` (SKILL.md-based extensible workflows, e.g. DCF, X research, memo writing)
@@ -87,9 +89,10 @@
 - `read_file`, `write_file`, `edit_file`: sandbox-aware local file tools; write/edit require approval.
 - `heartbeat`, `cron`: periodic checklist and scheduled job tools.
 - `memory_search`, `memory_get`, `memory_update`: persistent memory tools.
-- `a_share_analysis`: Tushare-backed China A-share structured analysis, enabled by `TUSHARE_TOKEN`.
+- `financial_calculator`: always-available deterministic CNY unit conversion (yuan, ten-thousand yuan, and 100-million yuan), numeric comparison, and percentage-change arithmetic; it does not fetch data or make valuation judgments.
+- `a_share_analysis`: Tushare-backed China A-share structured analysis, enabled by `TUSHARE_TOKEN`; returns multi-period statements plus business composition, audit, dividends, forecasts, and express reports while preserving partial endpoint failures.
 - `market_sentiment_analysis`: Tushare-backed China A-share broad market sentiment analysis, enabled by `TUSHARE_TOKEN`.
-- `technical_analysis`: deterministic daily/weekly technical analysis for one China A-share or supported China index, enabled by `TUSHARE_TOKEN`; Tushare supplies historical prices and local TypeScript computes weekly candles, MA, BOLL, KDJ, returns, volatility, drawdown, and formula signals.
+- `technical_analysis`: deterministic daily/weekly technical-state analysis for one China A-share or supported China index, enabled by `TUSHARE_TOKEN`; the registered tool exposes a neutral public assessment and hides raw action/position research fields.
 - `x_search`: X/Twitter search, enabled by `X_BEARER_TOKEN`.
 - `skill`: invokes SKILL.md-defined workflows (e.g. DCF valuation). Each skill runs at most once per query.
 - Tool registry: `src/tools/registry.ts`. Tools are conditionally included based on env vars.
@@ -97,10 +100,11 @@
 ## Skills
 
 - Skills live as `SKILL.md` files with YAML frontmatter (`name`, `description`) and markdown body (instructions).
-- Built-in skills include DCF, Dexter help, X research, memo writing, and the China A-share/index `technical-analysis` workflow under `src/skills/`.
+- Built-in skills include DCF, Dexter help, X research, memo writing, the China A-share/index `technical-analysis` workflow, and the broad single-A-share `stock-analysis` workflow under `src/skills/`.
 - Discovery: `src/skills/registry.ts` scans for SKILL.md files at startup.
 - Skills are exposed to the LLM as metadata in the system prompt; the LLM invokes them via the `skill` tool.
-- Technical-analysis routing is model-driven rather than a hard-coded gateway keyword branch: narrow requests should call `technical_analysis` directly, while a broader fundamental/news/technical report may delegate its technical lane to the `technical-analysis` subagent. The `technical-analysis` skill provides the Feishu-friendly structured workflow over the same tool.
+- Routing is model-driven rather than a hard-coded gateway keyword branch: narrow requests use the matching tool or skill, while an unspecified broad single-A-share request should use `stock-analysis` in the main agent. Keep ordinary one-company synthesis in the main agent; use `analysis` subagents for independent company lanes in comparisons or unusually dense multi-year statement work, and the `technical-analysis` subagent only as an isolated technical lane of a broader report.
+- `technical_analysis` has separate internal and public contracts: raw Baseline V0/Trend Recovery V1 events remain available for tests and research, while conversational surfaces receive neutral state, observation, structural-change, evidence-quality, limitation, and decision-context fields. Applicability V2.1 remains offline and unvalidated.
 
 ## Agent Architecture
 
@@ -116,7 +120,7 @@
 - Additional providers: `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`, `OLLAMA_CLOUD_API_KEY`
 - Ollama: `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`)
 - Gateway/headless models: `DEXTER_AGENT_MODEL`, `DEXTER_AGENT_MODEL_PROVIDER`
-- Subagents: `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, `DEEPSEEK_REASONING_EFFORT`, `DEEPSEEK_SUBAGENT_REASONING_EFFORT`
+- Subagents: `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, `DEEPSEEK_REASONING_EFFORT`, `DEEPSEEK_SUBAGENT_REASONING_EFFORT`, `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT`
 - Finance: `FINANCIAL_DATASETS_API_KEY`, `TUSHARE_TOKEN`
 - Search: `EXASEARCH_API_KEY`, `PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `LANGSEARCH_API_KEY`, `X_BEARER_TOKEN`
 - Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
