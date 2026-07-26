@@ -2,10 +2,10 @@
 
 ## Status
 
-- State: planned
+- State: implemented; behavioral evaluation pending
 - Created: 2026-07-13
-- Implementation started: no
-- Owner: next implementation session
+- Implementation started: yes
+- Owner: current branch
 
 ## Goal
 
@@ -19,11 +19,11 @@ The intended behavior is:
 - Keep `analysis` restricted to one standardized company lane in a multi-company comparison or a tightly scoped dense multi-year financial evidence packet.
 - Prevent `general-purpose` from becoming a fallback that bypasses the specialized financial subagent boundaries.
 
-## Current Problem
+## Pre-Implementation Problem
 
 The runtime has no deterministic `shouldSpawnSubagent()` classifier. The main model decides whether to emit `spawn_subagent` from prompt-visible policy and tool metadata.
 
-Current guidance is conservative and partly ambiguous:
+Before this change, the guidance was conservative and partly ambiguous:
 
 - The main prompt broadly mentions delegating analysis of one company, then separately says ordinary one-company analysis must stay in the main agent.
 - The detailed `SPAWN_SUBAGENT_DESCRIPTION` is stored in the registry, but `buildCompactToolDescriptions()` injects only `compactDescription`, while the bound `DynamicStructuredTool` uses a short description that says to consult the system prompt.
@@ -348,9 +348,13 @@ Possible follow-ups:
 ## Progress Notes
 
 - 2026-07-13: Plan created after source review and discussion. No implementation files changed.
+- 2026-07-13: Implemented the routing boundary updates in commit `3c0dce3`,
+  including main-agent policy, bound subagent descriptions, type-specific worker
+  prompts, stock-analysis workflow guidance, focused tests, and Harness context.
+- 2026-07-26: Reconfirmed that 253 Bun tests and TypeScript type checking pass.
+  Model-dependent behavioral evaluation remains a follow-up.
 
-## Open Questions
+## Follow-Up Questions
 
-- Whether exposing the full existing `SPAWN_SUBAGENT_DESCRIPTION` is acceptable for prompt-token cost, or whether it should be shortened while preserving all routing boundaries.
 - Which configured production model(s) should be used for the behavioral evaluation matrix.
 - What observed `general-purpose` financial bypass rate would justify the optional Phase 2 allow-list restriction.

@@ -21,6 +21,7 @@ This directory is the repo-local operating manual for Codex and other coding age
 - Before claiming done: `checklists/verification.md`
 - Credentials, file tools, gateway access, and data handling: `checklists/security.md`
 - Common implementation flows: `workflows/`
+- Reusable, bounded coding-agent development loops: `loops/`
 - Current coding, testing, and review standards: `standards/`
 - Known fixes and symptoms: `troubleshooting/`
 - New design rationale and ADRs: `decisions/`
@@ -37,6 +38,7 @@ This directory is the repo-local operating manual for Codex and other coding age
 - `troubleshooting/`: symptom-oriented debugging notes.
 - `plans/`: active or completed multi-step implementation plans.
 - `runs/`: concise records of meaningful verification or debugging sessions.
+- `loops/`: reusable outer-loop specifications that coordinate context, workflows, checks, verification feedback, retry budgets, human gates, and named terminal states for coding agents.
 
 ## Maintenance Rules
 

@@ -63,3 +63,6 @@ coverage.json
 
 # Scratchpad files
 scratchpads/*
+
+# Ephemeral coding-agent loop state
+.harness/loops/.state/

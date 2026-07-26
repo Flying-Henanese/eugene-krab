@@ -14,10 +14,12 @@ This fork keeps Dexter's autonomous financial research loop, then adds a gateway
 
 - Added Feishu gateway support through the Feishu/Lark `WSClient` long connection.
 - Supports Feishu one-on-one text chats and sends agent answers back to the same chat.
-- Added Feishu-specific message parsing, deduplication, outbound formatting, and channel profile handling.
+- Added Feishu-specific message parsing, deduplication, outbound formatting, optional updateable processing cards, and channel profile handling.
 - Added gateway/headless model selection via environment variables, useful when running outside the interactive CLI.
 - Split main-agent and subagent model configuration with `SUBAGENT_MODEL` and optional analysis-specific overrides.
 - Added reasoning-effort controls such as `DEEPSEEK_REASONING_EFFORT` and `DEEPSEEK_SUBAGENT_REASONING_EFFORT`.
+- Added Tushare-backed A-share fundamentals, market sentiment, and neutral deterministic technical-state analysis.
+- Added a source-disciplined single-A-share analysis workflow and bounded research-subagent execution.
 - Kept Dexter's original finance research tools, scratchpad, browser/search tools, skills, and evaluation workflow.
 
 ## Table of Contents
@@ -56,6 +58,8 @@ Key capabilities:
 - Autonomous tool use across financial data, filings, web search, browser scraping, and skills.
 - Subagent delegation for focused parallel research tasks.
 - Channel-aware answers for CLI, WhatsApp, and Feishu.
+- Structured A-share fundamentals, market sentiment, and neutral technical-state analysis through Tushare.
+- A combined single-A-share workflow that keeps fundamentals, current public information, technical evidence, and deterministic arithmetic distinct.
 - Model-aware context compaction and fast-model summarization.
 - Configurable main-agent, subagent, and reasoning-effort policies.
 
@@ -64,6 +68,7 @@ Key capabilities:
 - [Bun](https://bun.com) runtime, v1.0 or higher.
 - At least one LLM API key, such as OpenAI, Anthropic, Google, xAI, OpenRouter, DeepSeek, or Ollama.
 - `FINANCIAL_DATASETS_API_KEY` for US/global financial data.
+- `TUSHARE_TOKEN` for China A-share structured and technical data.
 - `EXASEARCH_API_KEY` or `TAVILY_API_KEY` for web search.
 - `FEISHU_APP_ID` and `FEISHU_APP_SECRET` if you want to run the Feishu gateway.
 
@@ -107,6 +112,7 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 
 # Finance and search
 FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
+TUSHARE_TOKEN=your-tushare-token
 EXASEARCH_API_KEY=your-exa-api-key
 TAVILY_API_KEY=your-tavily-api-key
 
@@ -155,7 +161,7 @@ For WhatsApp login:
 bun run gateway:login
 ```
 
-For Feishu, configure the app credentials in `.env`, enable the Feishu channel in the gateway config, then send a one-on-one text message to the bot. The first Feishu implementation is intentionally scoped to direct text chats: no group chats, webhooks, cards, images, or local allowlist.
+For Feishu, configure the app credentials in `.env`, enable the Feishu channel in the gateway config, then send a one-on-one text message to the bot. The current Feishu integration supports direct text chats, rich-text answers, table and long-answer cards, and an optional updateable processing card. It still excludes group chats, webhooks, images, per-tool progress updates, and project-local allowlists.
 
 ## Evaluate
 

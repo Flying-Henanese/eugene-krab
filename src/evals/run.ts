@@ -1,5 +1,5 @@
 /**
- * LangSmith Evaluation Runner for Dexter
+ * LangSmith Evaluation Runner for Eugene Krab
  * 
  * Usage:
  *   bun run src/evals/run.ts              # Run on all questions
@@ -137,7 +137,7 @@ function shuffleArray<T>(array: T[]): T[] {
 }
 
 // ============================================================================
-// Target function - wraps Dexter agent
+// Target function - wraps the Eugene Krab agent
 // ============================================================================
 
 async function target(inputs: { question: string }): Promise<{ answer: string }> {

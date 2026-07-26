@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Flying-Henanese/eugene-krab/.harness/loops/state.schema.json",
+  "title": "Coding Agent Loop State",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "taskId",
+    "loopName",
+    "loopVersion",
+    "originalRequest",
+    "phase",
+    "iteration",
+    "sourceState",
+    "acceptanceCriteria",
+    "changedFiles",
+    "verification",
+    "failures",
+    "budget",
+    "status",
+    "updatedAt"
+  ],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "loopName": {
+      "type": "string",
+      "minLength": 1
+    },
+    "loopVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "originalRequest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "authorizedScope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "excludedScope": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "phase": {
+      "enum": [
+        "bootstrap",
+        "select_work",
+        "act",
+        "focused_verify",
+        "repair",
+        "final_verify",
+        "review",
+        "terminal"
+      ]
+    },
+    "iteration": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sourceState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "head",
+        "dirty"
+      ],
+      "properties": {
+        "head": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "diffHash": {
+          "type": "string"
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "description",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "in_progress",
+              "passed",
+              "failed",
+              "blocked"
+            ]
+          },
+          "verifier": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "changedFiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status",
+          "sourceState",
+          "recordedAt"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "command": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "skipped",
+              "unavailable"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "sourceState": {
+            "type": "string",
+            "minLength": 1
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "signature",
+          "classification",
+          "count",
+          "summary"
+        ],
+        "properties": {
+          "signature": {
+            "type": "string",
+            "minLength": 1
+          },
+          "classification": {
+            "enum": [
+              "implementation",
+              "test_defect",
+              "environment",
+              "scope_conflict",
+              "spec_ambiguity",
+              "pre_existing",
+              "flaky",
+              "unsafe"
+            ]
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "expected": {
+            "type": "string"
+          },
+          "actual": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxIterations",
+        "usedIterations",
+        "maxRepeatedFailure"
+      ],
+      "properties": {
+        "maxIterations": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "usedIterations": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maxRepeatedFailure": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxFullVerificationRuns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "usedFullVerificationRuns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "status": {
+      "enum": [
+        "running",
+        "complete",
+        "no_change",
+        "needs_human",
+        "blocked",
+        "budget_exhausted",
+        "cancelled"
+      ]
+    },
+    "terminalReason": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

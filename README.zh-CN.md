@@ -14,10 +14,12 @@ Eugene Krab 是从 [Dexter](https://github.com/virattt/dexter) fork 而来的金
 
 - 增加飞书网关支持，基于 Feishu/Lark `WSClient` 长连接接收消息。
 - 支持飞书一对一文本聊天，并将智能体回答发送回同一个会话。
-- 增加飞书消息解析、消息去重、富文本发送格式化和 channel profile。
+- 增加飞书消息解析、消息去重、富文本发送格式化、可选的可更新处理状态卡片和 channel profile。
 - 增加网关/headless 场景下的模型环境变量配置，适合不经过 CLI `/model` 命令的服务化运行。
 - 支持主智能体和子智能体使用不同模型，例如主智能体使用强推理模型，子智能体使用 fast model。
 - 增加 reasoning effort 配置，例如 `DEEPSEEK_REASONING_EFFORT` 和 `DEEPSEEK_SUBAGENT_REASONING_EFFORT`。
+- 增加基于 Tushare 的 A 股基本面、市场情绪和中性确定性技术状态分析。
+- 增加来源约束明确的单只 A 股综合分析流程，以及有执行预算的 research 子智能体。
 - 保留 Dexter 原有的金融数据、SEC filing、网页搜索、浏览器抓取、scratchpad、skills 和 eval 工作流。
 
 ## 目录
@@ -56,6 +58,8 @@ Eugene Krab 可以把复杂的金融问题拆解成结构化研究计划。它�
 - 自动选择和调用金融数据、filings、网页搜索、浏览器抓取和 skills 等工具。
 - 通过子智能体并行处理独立研究任务。
 - 根据不同入口生成更适合 CLI、WhatsApp 或飞书的回答。
+- 通过 Tushare 提供结构化 A 股基本面、市场情绪和中性技术状态分析。
+- 通过单只 A 股综合分析流程区分基本面、近期公开信息、技术证据和确定性计算。
 - 基于模型上下文窗口进行自动压缩和 fast-model 摘要。
 - 可配置主智能体、子智能体和 reasoning effort 策略。
 
@@ -64,6 +68,7 @@ Eugene Krab 可以把复杂的金融问题拆解成结构化研究计划。它�
 - [Bun](https://bun.com) v1.0 或更高版本。
 - 至少一个 LLM API Key，例如 OpenAI、Anthropic、Google、xAI、OpenRouter、DeepSeek 或 Ollama。
 - `FINANCIAL_DATASETS_API_KEY`，用于美股/全球金融数据。
+- `TUSHARE_TOKEN`，用于 A 股结构化数据和技术分析。
 - `EXASEARCH_API_KEY` 或 `TAVILY_API_KEY`，用于网页搜索。
 - 如需使用飞书网关，需要 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`。
 
@@ -107,6 +112,7 @@ OLLAMA_BASE_URL=http://127.0.0.1:11434
 
 # Finance and search
 FINANCIAL_DATASETS_API_KEY=your-financial-datasets-api-key
+TUSHARE_TOKEN=your-tushare-token
 EXASEARCH_API_KEY=your-exa-api-key
 TAVILY_API_KEY=your-tavily-api-key
 
@@ -155,7 +161,7 @@ WhatsApp 登录：
 bun run gateway:login
 ```
 
-飞书使用方式：在 `.env` 中配置飞书应用凭证，在 gateway 配置中启用 Feishu channel，然后向飞书机器人发送一对一文本消息。当前飞书版本刻意保持小范围：只支持一对一文本聊天，不支持群聊、webhook、卡片、图片或项目本地 allowlist。
+飞书使用方式：在 `.env` 中配置飞书应用凭证，在 gateway 配置中启用 Feishu channel，然后向飞书机器人发送一对一文本消息。当前版本支持一对一文本聊天、富文本回答、表格和长回答卡片，以及可选的可更新处理状态卡片；仍不支持群聊、webhook、图片、逐工具进度更新或项目本地 allowlist。
 
 ## 评测
 
