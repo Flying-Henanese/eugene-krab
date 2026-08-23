@@ -130,7 +130,7 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       name: 'read_file',
       tool: readFileTool,
       description: READ_FILE_DESCRIPTION,
-      compactDescription: 'Read a local file by path. Returns file content as text.',
+      compactDescription: 'Read a local file by path with line or byte-offset pagination for large files.',
       concurrencySafe: true,
     },
     {
