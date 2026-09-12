@@ -6,7 +6,7 @@ Read this when changing module boundaries, tracing request flow, or deciding whe
 
 - CLI UI: Ink/React components under `src/components/`, command handling under `src/commands/`, and controllers under `src/controllers/`.
 - Agent runtime: `src/agent/` owns system prompt assembly, iterative model/tool loop, scratchpad, compaction, microcompaction, and event emission.
-- Model layer: `src/model/llm.ts` creates LangChain chat models for OpenAI-compatible, Anthropic, Google, Ollama, xAI, OpenRouter, Moonshot, and DeepSeek providers.
+- Model layer: `src/model/llm.ts` creates LangChain chat models for OpenAI, Anthropic, Google, xAI, Moonshot, DeepSeek, GLM, OpenRouter, Ollama, and Ollama Cloud providers.
 - Tools: `src/tools/registry.ts` is the central registration point. Tool implementations live in subdirectories by capability.
 - A-share structured evidence: `src/tools/finance/tushare/a-share-analysis.ts` resolves one company, fetches the market snapshot and up to eight deduplicated statement periods, prefers updated report versions, and collects recoverable supplemental evidence for business composition, audit, dividends, forecasts, and express reports.
 - Deterministic finance arithmetic: `src/tools/finance/financial-calculator.ts` batches CNY unit conversions, numeric comparisons, and percentage changes. It is always registered and contains no provider fetch or valuation logic.

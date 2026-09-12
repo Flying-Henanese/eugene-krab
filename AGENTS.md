@@ -67,13 +67,13 @@
 
 ## LLM Providers
 
-- Supported: OpenAI (default), Anthropic, Google, xAI (Grok), Moonshot, DeepSeek, OpenRouter, Ollama (local), and Ollama Cloud.
+- Supported: OpenAI (default), Anthropic, Google, xAI (Grok), Moonshot, DeepSeek, GLM (Zhipu AI), OpenRouter, Ollama (local), and Ollama Cloud.
 - Default model: `gpt-5.5`. Provider detection is prefix-based (`claude-` -> Anthropic, `gemini-` -> Google, etc.).
 - Fast models and provider metadata live in `src/providers.ts`.
 - Anthropic uses explicit `cache_control` on system prompt for prompt caching cost savings.
 - Users switch providers/models via `/model` command in the CLI.
 - Gateway/headless runs can use `DEXTER_AGENT_MODEL` and `DEXTER_AGENT_MODEL_PROVIDER`.
-- Subagents can use `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, and DeepSeek reasoning-effort env vars.
+- Subagents can use `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, and provider-specific DeepSeek or GLM reasoning-effort env vars.
 
 ## Tools
 
@@ -111,16 +111,16 @@
 - Agent loop: `src/agent/agent.ts`. Iterative tool-calling loop with configurable max iterations (default 10).
 - Scratchpad: `src/agent/scratchpad.ts`. Single source of truth for all tool results within a query.
 - Context management: Anthropic-style. Full tool results kept in context; oldest results cleared when token threshold exceeded.
-- Final answer: generated in a separate LLM call with full scratchpad context (no tools bound).
-- Events: agent yields typed events (`tool_start`, `tool_end`, `thinking`, `answer_start`, `done`, etc.) for real-time UI updates.
+- Final answer: the first model response without tool calls becomes the final answer. Tool results remain in the message history, subject to result budgeting and context compaction. Research workers additionally reserve a tool-free final iteration.
+- Events: agent yields typed events (`stream_progress`, `thinking`, `tool_start`, `tool_end`, `tool_error`, `done`, etc.) for real-time UI updates.
 
 ## Environment Variables
 
 - LLM keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`
-- Additional providers: `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`, `OLLAMA_CLOUD_API_KEY`
+- Additional providers: `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`, `GLM_API_KEY`, `OLLAMA_CLOUD_API_KEY`
 - Ollama: `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`)
 - Gateway/headless models: `DEXTER_AGENT_MODEL`, `DEXTER_AGENT_MODEL_PROVIDER`
-- Subagents: `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, `DEEPSEEK_REASONING_EFFORT`, `DEEPSEEK_SUBAGENT_REASONING_EFFORT`, `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT`
+- Subagents: `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, `DEEPSEEK_REASONING_EFFORT`, `DEEPSEEK_SUBAGENT_REASONING_EFFORT`, `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT`, `GLM_REASONING_EFFORT`, `GLM_SUBAGENT_REASONING_EFFORT`, `GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT`
 - Finance: `FINANCIAL_DATASETS_API_KEY`, `TUSHARE_TOKEN`
 - Search: `EXASEARCH_API_KEY`, `PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `LANGSEARCH_API_KEY`, `X_BEARER_TOKEN`
 - Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
@@ -143,5 +143,5 @@
 ## Security
 
 - API keys stored in `.env` (gitignored). Users can also enter keys interactively via the CLI.
-- Config stored in `.dexter/settings.json` (gitignored).
+- Local model and gateway config is stored in `.dexter/settings.json` and `.dexter/gateway.json` (gitignored). If settings are absent, the CLI uses `openai` / `gpt-5.5`; gateway model environment variables take precedence over the settings fallback.
 - Never commit or expose real API keys, tokens, or credentials.

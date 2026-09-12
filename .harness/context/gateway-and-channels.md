@@ -35,7 +35,7 @@ The current scope still excludes group chats, webhooks, images, per-tool progres
 
 ## Gateway Config
 
-Config is loaded from `.dexter/gateway.json` or `DEXTER_GATEWAY_CONFIG`. Feishu is disabled by default when no config file exists. WhatsApp defaults enabled. Gateway model policy can come from JSON config or environment variables.
+Config is loaded from `.dexter/gateway.json` or `DEXTER_GATEWAY_CONFIG`. The file is optional and gitignored. When it is absent, the runtime constructs defaults with WhatsApp enabled and Feishu, including its processing card, disabled. Gateway model policy can come from JSON config or environment variables.
 
 ## Testing Targets
 

@@ -4,7 +4,7 @@ Use this before changing credentials, gateway access, file tools, memory, or ext
 
 ## Secrets
 
-- Do not commit `.env`, `.dexter/credentials`, session files, scratchpads, or real API tokens.
+- Do not commit `.env`, `.dexter/settings.json`, `.dexter/gateway.json`, `.dexter/credentials`, session files, scratchpads, or real API tokens.
 - Keep sample values placeholder-like in docs and examples.
 - Confirm secret presence without echoing values.
 

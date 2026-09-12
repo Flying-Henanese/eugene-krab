@@ -34,6 +34,8 @@ Never commit `.env`, real credentials, `.dexter/credentials`, or private runtime
 
 Interactive CLI model selection is stored in `.dexter/settings.json`. Gateway/headless runs can override with `DEXTER_AGENT_MODEL` and `DEXTER_AGENT_MODEL_PROVIDER`, and gateway config can provide `gateway.model` and `gateway.modelProvider`.
 
+The settings file is optional local state. When it is absent or unreadable, the CLI falls back to the built-in `openai` provider and `gpt-5.5` model. Gateway model resolution prefers explicit arguments, gateway JSON, and `DEXTER_AGENT_MODEL` / `DEXTER_AGENT_MODEL_PROVIDER` before falling back to settings and then the same built-in defaults. The runtime does not need to generate a settings file merely to start.
+
 DeepSeek V4 thinking mode is handled in `src/model/llm.ts` for `deepseek-v4-pro` and `deepseek-v4-flash`. GLM 5.3 Flash routes to the Zhipu AI OpenAI-compatible endpoint and retains `reasoning_content` across tool-call turns.
 
 `SUBAGENT_ANALYSIS_MODEL` overrides only `analysis` workers. For DeepSeek, `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT` overrides reasoning effort only for those workers, then falls back to `DEEPSEEK_SUBAGENT_REASONING_EFFORT` and the normal main-model setting. Other subagent types continue to use the general subagent reasoning policy.
@@ -42,6 +44,8 @@ DeepSeek V4 thinking mode is handled in `src/model/llm.ts` for `deepseek-v4-pro`
 
 Gateway config is loaded from `DEXTER_GATEWAY_CONFIG` or `.dexter/gateway.json`. If no file exists, WhatsApp defaults enabled and Feishu defaults disabled. Feishu account credentials come from `FEISHU_APP_ID` and `FEISHU_APP_SECRET`, not from the JSON config.
 
+The gateway config file is optional local state. Missing-file defaults are constructed in `loadGatewayConfig()`; `gateway:login` writes the file only when it needs to persist WhatsApp setup. A repository checkout therefore does not require a committed `.dexter/gateway.json`.
+
 ## Local State
 
-The `.dexter/` directory stores settings, memory, scratchpads, sessions, credentials, and tool results. Treat it as local runtime state unless a task explicitly asks to inspect it.
+The `.dexter/` directory stores settings, gateway config, memory, scratchpads, sessions, credentials, and tool results. It is gitignored local runtime state and must not be committed.
