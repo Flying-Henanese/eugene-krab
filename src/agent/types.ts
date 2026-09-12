@@ -1,7 +1,7 @@
 import type { GroupContext } from './prompts.js';
 import type { MessageQueue } from '../utils/message-queue.js';
 import type { Question, UserAnswers } from '../tools/ask-user-question/types.js';
-import type { DeepSeekReasoningEffort } from '../model/llm.js';
+import type { ReasoningEffort } from '../model/llm.js';
 import type { ToolExecutionBudgetConfig } from './tool-budget.js';
 
 // ============================================================================
@@ -76,8 +76,8 @@ export interface AgentConfig {
   systemPromptOverride?: string;
   /** Optional short label (e.g. "research") used to prefix nested progress lines. */
   agentLabel?: string;
-  /** Optional DeepSeek reasoning effort override for this agent run. */
-  reasoningEffort?: DeepSeekReasoningEffort;
+  /** Optional provider-specific reasoning effort override for this agent run. */
+  reasoningEffort?: ReasoningEffort;
   /** Optional hard execution budget. Disabled for ordinary agents by default. */
   toolExecutionBudget?: ToolExecutionBudgetConfig;
   /** Reserve the final allowed iteration for a tool-free synthesis call. */

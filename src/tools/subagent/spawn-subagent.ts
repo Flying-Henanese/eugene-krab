@@ -5,7 +5,8 @@ import type { TokenUsage } from '../../agent/types.js';
 import {
   getFastModel,
   resolveDeepSeekReasoningEffort,
-  type DeepSeekReasoningEffort,
+  resolveGlmReasoningEffort,
+  type ReasoningEffort,
 } from '../../model/llm.js';
 import { resolveProvider } from '../../providers.js';
 import {
@@ -97,11 +98,26 @@ export function resolveSubagentModel(parentModel: string, typeKey: string): stri
   return getFastModel(resolveProvider(parentModel).id, parentModel);
 }
 
-export function resolveSubagentReasoningEffort(typeKey: string): DeepSeekReasoningEffort {
-  const configured = typeKey === 'analysis'
-    ? process.env.DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT ?? process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT
-    : process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
-  return resolveDeepSeekReasoningEffort(configured);
+export function resolveSubagentReasoningEffort(
+  typeKey: string,
+  model = 'deepseek-v4-pro',
+): ReasoningEffort | undefined {
+  const provider = resolveProvider(model).id;
+  if (provider === 'glm') {
+    const configured = typeKey === 'analysis'
+      ? process.env.GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT ?? process.env.GLM_SUBAGENT_REASONING_EFFORT
+      : process.env.GLM_SUBAGENT_REASONING_EFFORT;
+    return resolveGlmReasoningEffort(configured);
+  }
+
+  if (provider === 'deepseek') {
+    const configured = typeKey === 'analysis'
+      ? process.env.DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT ?? process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT
+      : process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
+    return resolveDeepSeekReasoningEffort(configured);
+  }
+
+  return undefined;
 }
 
 /**
@@ -121,7 +137,7 @@ export function createSpawnSubagent(model: string): DynamicStructuredTool {
       const typeCfg = SUBAGENT_TYPES[typeKey] ?? SUBAGENT_TYPES[DEFAULT_SUBAGENT_TYPE];
       const toolAllowlist = resolveSubagentTools(typeKey);
       const subagentModel = resolveSubagentModel(model, typeKey);
-      const reasoningEffort = resolveSubagentReasoningEffort(typeKey);
+      const reasoningEffort = resolveSubagentReasoningEffort(typeKey, subagentModel);
 
       // Lazy import to break the registry → spawn-subagent → agent → registry cycle.
       // By first invocation all modules are fully loaded.

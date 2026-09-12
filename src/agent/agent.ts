@@ -384,6 +384,7 @@ export class Agent {
 
     const response = new AIMessage({
       content: accumulated.content,
+      additional_kwargs: accumulated.additional_kwargs,
       tool_calls: accumulated.tool_calls,
       invalid_tool_calls: accumulated.invalid_tool_calls,
       usage_metadata: accumulated.usage_metadata,

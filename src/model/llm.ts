@@ -1,5 +1,5 @@
 import { AIMessage, AIMessageChunk, BaseMessage } from '@langchain/core/messages';
-import { ChatOpenAI } from '@langchain/openai';
+import { ChatOpenAI, ChatOpenAICompletions } from '@langchain/openai';
 import { ChatAnthropic } from '@langchain/anthropic';
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOllama } from '@langchain/ollama';
@@ -9,6 +9,7 @@ import { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { StructuredToolInterface } from '@langchain/core/tools';
 import { Runnable } from '@langchain/core/runnables';
 import { z } from 'zod';
+import type OpenAI from 'openai';
 import { DEFAULT_SYSTEM_PROMPT } from '@/agent/prompts';
 import type { TokenUsage } from '@/agent/types';
 import { logger } from '@/utils';
@@ -27,6 +28,8 @@ export function getFastModel(modelProvider: string, fallbackModel: string): stri
 }
 
 export type DeepSeekReasoningEffort = 'low' | 'medium' | 'high';
+export type GlmReasoningEffort = 'max' | 'high' | 'low';
+export type ReasoningEffort = DeepSeekReasoningEffort | GlmReasoningEffort;
 
 function normalizeDeepSeekReasoningEffort(
   value: string | undefined,
@@ -42,6 +45,21 @@ export function resolveDeepSeekReasoningEffort(
     explicit ?? process.env.DEEPSEEK_REASONING_EFFORT,
     'high',
   );
+}
+
+function normalizeGlmReasoningEffort(
+  value: string | undefined,
+  fallback: GlmReasoningEffort = 'max',
+): GlmReasoningEffort {
+  return value === 'max' || value === 'high' || value === 'low' ? value : fallback;
+}
+
+/**
+ * GLM-5.3 and GLM-5.3-Flash accept max, high, and low reasoning effort.
+ * The provider default is max when no valid environment value is configured.
+ */
+export function resolveGlmReasoningEffort(explicit?: string): GlmReasoningEffort {
+  return normalizeGlmReasoningEffort(explicit ?? process.env.GLM_REASONING_EFFORT, 'max');
 }
 
 // Generic retry helper with exponential backoff
@@ -70,17 +88,172 @@ async function withRetry<T>(fn: () => Promise<T>, provider: string, maxAttempts 
 // Model provider configuration
 interface ModelOpts {
   streaming: boolean;
-  reasoningEffort?: DeepSeekReasoningEffort;
+  reasoningEffort?: ReasoningEffort;
 }
 
 type ModelFactory = (name: string, opts: ModelOpts) => BaseChatModel;
 
-function getApiKey(envVar: string): string {
-  const apiKey = process.env[envVar];
-  if (!apiKey) {
-    throw new Error(`[LLM] ${envVar} not found in environment variables`);
+function getApiKey(...envVars: string[]): string {
+  for (const envVar of envVars) {
+    const apiKey = process.env[envVar];
+    if (apiKey) return apiKey;
   }
-  return apiKey;
+  throw new Error(`[LLM] ${envVars.join(' or ')} not found in environment variables`);
+}
+
+const GLM_REASONING_CONTENT_KEY = 'glm_reasoning_content';
+const GLM_REASONING_MESSAGE_PREFIX = 'glm-reasoning-';
+
+type GlmReasoningEntry = {
+  reasoningContent: string;
+  originalName?: string;
+};
+
+const glmReasoningByMessageName = new Map<string, GlmReasoningEntry>();
+
+/**
+ * LangChain's OpenAI converter does not retain GLM's provider-specific
+ * reasoning_content field. GLM requires that field on an assistant tool call
+ * to be sent back alongside the subsequent tool result.
+ */
+class GlmChatOpenAICompletions extends ChatOpenAICompletions {
+  protected override _convertCompletionsMessageToBaseMessage(
+    message: OpenAI.ChatCompletionMessage,
+    _rawResponse: OpenAI.Chat.Completions.ChatCompletion,
+  ): BaseMessage {
+    const converted = super._convertCompletionsMessageToBaseMessage(message, _rawResponse);
+    const reasoningContent = (message as { reasoning_content?: unknown }).reasoning_content;
+
+    if (!AIMessage.isInstance(converted) || typeof reasoningContent !== 'string') {
+      return converted;
+    }
+
+    return new AIMessage({
+      content: converted.content,
+      additional_kwargs: {
+        ...converted.additional_kwargs,
+        [GLM_REASONING_CONTENT_KEY]: reasoningContent,
+      },
+      response_metadata: converted.response_metadata,
+      tool_calls: converted.tool_calls,
+      invalid_tool_calls: converted.invalid_tool_calls,
+      usage_metadata: converted.usage_metadata,
+      id: converted.id,
+      name: converted.name,
+    });
+  }
+}
+
+function getGlmReasoningContent(message: AIMessage): string | undefined {
+  const value = message.additional_kwargs[GLM_REASONING_CONTENT_KEY];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function prepareGlmMessages(messages: BaseMessage[]): {
+  messages: BaseMessage[];
+  release: () => void;
+} {
+  const messageNames: string[] = [];
+  const preparedMessages = messages.map((message) => {
+    if (!AIMessage.isInstance(message)) return message;
+
+    const reasoningContent = getGlmReasoningContent(message);
+    if (reasoningContent === undefined) return message;
+
+    const messageName = `${GLM_REASONING_MESSAGE_PREFIX}${crypto.randomUUID()}`;
+    messageNames.push(messageName);
+    glmReasoningByMessageName.set(messageName, {
+      reasoningContent,
+      originalName: message.name,
+    });
+
+    return new AIMessage({
+      content: message.content,
+      additional_kwargs: message.additional_kwargs,
+      response_metadata: message.response_metadata,
+      tool_calls: message.tool_calls,
+      invalid_tool_calls: message.invalid_tool_calls,
+      usage_metadata: message.usage_metadata,
+      id: message.id,
+      name: messageName,
+    });
+  });
+
+  return {
+    messages: preparedMessages,
+    release: () => {
+      for (const messageName of messageNames) {
+        glmReasoningByMessageName.delete(messageName);
+      }
+    },
+  };
+}
+
+type FetchFunction = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+const replayGlmReasoningContent: FetchFunction = async (input, init) => {
+  if (typeof init?.body !== 'string') {
+    return fetch(input, init);
+  }
+
+  try {
+    const request = JSON.parse(init.body) as { messages?: Array<Record<string, unknown>> };
+    if (!Array.isArray(request.messages)) {
+      return fetch(input, init);
+    }
+
+    let changed = false;
+    const messages = request.messages.map((message) => {
+      const messageName = message.name;
+      if (typeof messageName !== 'string') return message;
+
+      const reasoning = glmReasoningByMessageName.get(messageName);
+      if (!reasoning) return message;
+
+      changed = true;
+      const { name: _reasoningMarker, ...withoutMarker } = message;
+      return {
+        ...withoutMarker,
+        ...(reasoning.originalName ? { name: reasoning.originalName } : {}),
+        reasoning_content: reasoning.reasoningContent,
+      };
+    });
+
+    if (!changed) {
+      return fetch(input, init);
+    }
+
+    return fetch(input, {
+      ...init,
+      body: JSON.stringify({ ...request, messages }),
+    });
+  } catch {
+    return fetch(input, init);
+  }
+};
+
+function createGlmChatModel(name: string, opts: ModelOpts): ChatOpenAI {
+  const { reasoningEffort, ...chatOpts } = opts;
+  const fields = {
+    model: name,
+    ...chatOpts,
+    apiKey: getApiKey('GLM_API_KEY', 'OPENAI_API_KEY'),
+    configuration: {
+      baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+      fetch: replayGlmReasoningContent as typeof fetch,
+    },
+    // Keep a complete response so reasoning_content can survive a tool round.
+    disableStreaming: true,
+    modelKwargs: {
+      thinking: { type: 'enabled' },
+      reasoning_effort: resolveGlmReasoningEffort(reasoningEffort),
+    },
+  };
+
+  return new ChatOpenAI({
+    ...fields,
+    completions: new GlmChatOpenAICompletions(fields),
+  });
 }
 
 // Factories keyed by provider id — prefix routing is handled by resolveProvider()
@@ -146,6 +319,7 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
       }),
     });
   },
+  glm: (name, opts) => createGlmChatModel(name, opts),
   ollama: (name, opts) =>
     new ChatOllama({
       model: name.replace(/^ollama:/, ''),
@@ -175,10 +349,10 @@ const DEFAULT_FACTORY: ModelFactory = (name, opts) =>
 export function getChatModel(
   modelName: string = DEFAULT_MODEL,
   streaming: boolean = false,
-  options: { reasoningEffort?: DeepSeekReasoningEffort } = {},
+  options: { reasoningEffort?: ReasoningEffort } = {},
 ): BaseChatModel {
   const provider = resolveProvider(modelName);
-  const opts: ModelOpts = provider.id === 'deepseek' && options.reasoningEffort
+  const opts: ModelOpts = (provider.id === 'deepseek' || provider.id === 'glm') && options.reasoningEffort
     ? { streaming, reasoningEffort: options.reasoningEffort }
     : { streaming };
   const factory = MODEL_FACTORIES[provider.id] ?? DEFAULT_FACTORY;
@@ -191,7 +365,7 @@ interface CallLlmOptions {
   outputSchema?: z.ZodType<unknown>;
   tools?: StructuredToolInterface[];
   signal?: AbortSignal;
-  reasoningEffort?: DeepSeekReasoningEffort;
+  reasoningEffort?: ReasoningEffort;
 }
 
 export interface LlmResult {
@@ -324,7 +498,7 @@ interface CallLlmWithMessagesOptions {
   model?: string;
   tools?: StructuredToolInterface[];
   signal?: AbortSignal;
-  reasoningEffort?: DeepSeekReasoningEffort;
+  reasoningEffort?: ReasoningEffort;
 }
 
 /**
@@ -360,11 +534,19 @@ export async function callLlmWithMessages(
   const finalMessages = provider.id === 'anthropic'
     ? annotateSystemMessageForCaching(messages)
     : messages;
+  const prepared = provider.id === 'glm'
+    ? prepareGlmMessages(finalMessages)
+    : { messages: finalMessages, release: () => {} };
 
-  const result = await withRetry(
-    () => runnable.invoke(finalMessages, invokeOpts),
-    provider.displayName,
-  );
+  let result;
+  try {
+    result = await withRetry(
+      () => runnable.invoke(prepared.messages, invokeOpts),
+      provider.displayName,
+    );
+  } finally {
+    prepared.release();
+  }
 
   const usage = extractUsage(result);
   return { response: result as AIMessage, usage };
@@ -402,10 +584,17 @@ export async function* streamLlmWithMessages(
   const finalMessages = provider.id === 'anthropic'
     ? annotateSystemMessageForCaching(messages)
     : messages;
+  const prepared = provider.id === 'glm'
+    ? prepareGlmMessages(finalMessages)
+    : { messages: finalMessages, release: () => {} };
 
-  const stream = await runnable.stream(finalMessages, invokeOpts);
+  try {
+    const stream = await runnable.stream(prepared.messages, invokeOpts);
 
-  for await (const chunk of stream) {
-    yield chunk as AIMessageChunk;
+    for await (const chunk of stream) {
+      yield chunk as AIMessageChunk;
+    }
+  } finally {
+    prepared.release();
   }
 }

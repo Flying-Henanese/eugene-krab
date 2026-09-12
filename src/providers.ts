@@ -68,6 +68,13 @@ export const PROVIDERS: ProviderDef[] = [
     contextWindow: 1_000_000,
   },
   {
+    id: 'glm',
+    displayName: 'GLM (Zhipu AI)',
+    modelPrefix: 'glm-',
+    apiKeyEnvVar: 'GLM_API_KEY',
+    fastModel: 'glm-5.3-flash',
+  },
+  {
     id: 'openrouter',
     displayName: 'OpenRouter',
     modelPrefix: 'openrouter:',

@@ -7,6 +7,9 @@ const originalAnalysisModel = process.env.SUBAGENT_ANALYSIS_MODEL;
 const originalReasoningEffort = process.env.DEEPSEEK_REASONING_EFFORT;
 const originalSubagentReasoningEffort = process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
 const originalAnalysisSubagentReasoningEffort = process.env.DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT;
+const originalGlmReasoningEffort = process.env.GLM_REASONING_EFFORT;
+const originalGlmSubagentReasoningEffort = process.env.GLM_SUBAGENT_REASONING_EFFORT;
+const originalGlmAnalysisSubagentReasoningEffort = process.env.GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT;
 
 afterEach(() => {
   if (originalSubagentModel === undefined) delete process.env.SUBAGENT_MODEL;
@@ -23,6 +26,15 @@ afterEach(() => {
 
   if (originalAnalysisSubagentReasoningEffort === undefined) delete process.env.DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT;
   else process.env.DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT = originalAnalysisSubagentReasoningEffort;
+
+  if (originalGlmReasoningEffort === undefined) delete process.env.GLM_REASONING_EFFORT;
+  else process.env.GLM_REASONING_EFFORT = originalGlmReasoningEffort;
+
+  if (originalGlmSubagentReasoningEffort === undefined) delete process.env.GLM_SUBAGENT_REASONING_EFFORT;
+  else process.env.GLM_SUBAGENT_REASONING_EFFORT = originalGlmSubagentReasoningEffort;
+
+  if (originalGlmAnalysisSubagentReasoningEffort === undefined) delete process.env.GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT;
+  else process.env.GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT = originalGlmAnalysisSubagentReasoningEffort;
 });
 
 describe('resolveSubagentModel', () => {
@@ -82,6 +94,15 @@ describe('resolveSubagentReasoningEffort', () => {
     delete process.env.DEEPSEEK_SUBAGENT_REASONING_EFFORT;
 
     expect(resolveSubagentReasoningEffort('analysis')).toBe('medium');
+  });
+
+  test('uses GLM-specific reasoning policy for GLM subagents', () => {
+    process.env.GLM_REASONING_EFFORT = 'max';
+    process.env.GLM_SUBAGENT_REASONING_EFFORT = 'low';
+    process.env.GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT = 'high';
+
+    expect(resolveSubagentReasoningEffort('research', 'glm-5.3-flash')).toBe('low');
+    expect(resolveSubagentReasoningEffort('analysis', 'glm-5.3-flash')).toBe('high');
   });
 });
 
