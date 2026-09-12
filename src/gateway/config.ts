@@ -184,7 +184,12 @@ export function loadGatewayConfig(overridePath?: string): GatewayConfig {
     const example = readFileSync(DEFAULT_GATEWAY_EXAMPLE_PATH, 'utf8');
     GatewayConfigSchema.parse(JSON.parse(example));
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, example, 'utf8');
+    try {
+      writeFileSync(path, example, { encoding: 'utf8', flag: 'wx' });
+    } catch (error) {
+      // Another process may have initialized the config after the existence check.
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    }
   }
   if (!existsSync(path)) {
     return {
