@@ -1,10 +1,60 @@
 import { describe, expect, test } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadGatewayConfig, resolveFeishuAccount, resolveGatewayAgentModel } from './config.js';
 
 describe('gateway config', () => {
+  test('initializes the default gateway config from the root example', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dexter-gateway-config-'));
+    const previousCwd = process.cwd();
+    const example = {
+      channels: {
+        feishu: {
+          enabled: true,
+          processingCard: { enabled: true, text: '正在分析中，请稍候…' },
+        },
+      },
+    };
+    writeFileSync(join(dir, 'gateway.example.json'), JSON.stringify(example), 'utf8');
+
+    try {
+      process.chdir(dir);
+      const cfg = loadGatewayConfig();
+
+      expect(cfg.channels.whatsapp.enabled).toBe(true);
+      expect(cfg.channels.feishu.enabled).toBe(true);
+      expect(cfg.channels.feishu.processingCard.enabled).toBe(true);
+      expect(existsSync(join(dir, '.dexter', 'gateway.json'))).toBe(true);
+      expect(JSON.parse(readFileSync(join(dir, '.dexter', 'gateway.json'), 'utf8'))).toEqual(example);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('does not overwrite an existing default gateway config', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dexter-gateway-config-'));
+    const previousCwd = process.cwd();
+    const existing = { channels: { feishu: { enabled: false } } };
+    mkdirSync(join(dir, '.dexter'), { recursive: true });
+    writeFileSync(join(dir, '.dexter', 'gateway.json'), JSON.stringify(existing), 'utf8');
+    writeFileSync(
+      join(dir, 'gateway.example.json'),
+      JSON.stringify({ channels: { feishu: { enabled: true } } }),
+      'utf8',
+    );
+
+    try {
+      process.chdir(dir);
+      expect(loadGatewayConfig().channels.feishu.enabled).toBe(false);
+      expect(JSON.parse(readFileSync(join(dir, '.dexter', 'gateway.json'), 'utf8'))).toEqual(existing);
+    } finally {
+      process.chdir(previousCwd);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test('defaults Feishu to disabled when config file is absent', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dexter-gateway-config-'));
     const path = join(dir, 'missing.json');

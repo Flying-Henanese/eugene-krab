@@ -27,7 +27,7 @@ Current Feishu behavior:
 - Ignores non-`p2p` chats and non-text message types.
 - Deduplicates message IDs with a TTL.
 - Sends outbound answers through Feishu-specific outbound formatting.
-- Can optionally send an updateable “processing” card before an agent run and replace it with the final answer. This is disabled by default under `channels.feishu.processingCard` so deployments without the Feishu update-message permission retain the existing behavior.
+- Can optionally send an updateable “processing” card before an agent run and replace it with the final answer. The schema and no-example fallback disable it, while the committed root `gateway.example.json` enables it for this project's Feishu-first deployment.
 - Final card answers are paginated at a 28 KB safety budget and 80 elements per card. The first page replaces the processing card and later pages are sent as numbered continuation cards; without a processing card, long prose and table answers use the same multi-card path while ordinary short prose remains a rich-text post.
 - Falls back to the existing standalone outbound path when processing-card creation or final update fails; empty answers and agent failures are best-effort updates to a terminal card state.
 
@@ -35,7 +35,7 @@ The current scope still excludes group chats, webhooks, images, per-tool progres
 
 ## Gateway Config
 
-Config is loaded from `.dexter/gateway.json` or `DEXTER_GATEWAY_CONFIG`. The file is optional and gitignored. When it is absent, the runtime constructs defaults with WhatsApp enabled and Feishu, including its processing card, disabled. Gateway model policy can come from JSON config or environment variables.
+Config is loaded from `.dexter/gateway.json` or `DEXTER_GATEWAY_CONFIG`. The local file is gitignored. When the default-path file is absent, the runtime validates root `gateway.example.json`, creates `.dexter/`, and copies the example once without overwriting future local changes. This project's example enables Feishu with its processing card and leaves WhatsApp on its enabled schema default. If the example is also absent, the runtime falls back to WhatsApp enabled and Feishu disabled. Explicit override paths are never initialized from the root example. Gateway model policy can come from JSON config or environment variables.
 
 ## Testing Targets
 

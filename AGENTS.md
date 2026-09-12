@@ -39,7 +39,7 @@
   - Utils: `src/utils/` (env, config, paths, caching, token estimation, tool-result storage)
   - Evals: `src/evals/` (LangSmith evaluation runner with Ink UI)
 - Config: `.dexter/settings.json` (persisted model/provider selection)
-- Gateway config: `.dexter/gateway.json` by default, or `DEXTER_GATEWAY_CONFIG`
+- Gateway config: `.dexter/gateway.json` by default, or `DEXTER_GATEWAY_CONFIG`; on first default-path startup, root `gateway.example.json` seeds the local file without overwriting an existing config
 - Environment: `.env` (API keys; see `env.example`)
 - Scripts: `scripts/release.sh`
 
@@ -143,5 +143,5 @@
 ## Security
 
 - API keys stored in `.env` (gitignored). Users can also enter keys interactively via the CLI.
-- Local model and gateway config is stored in `.dexter/settings.json` and `.dexter/gateway.json` (gitignored). If settings are absent, the CLI uses `openai` / `gpt-5.5`; gateway model environment variables take precedence over the settings fallback.
+- Local model and gateway config is stored in `.dexter/settings.json` and `.dexter/gateway.json` (gitignored). If settings are absent, the CLI uses `openai` / `gpt-5.5`; gateway model environment variables take precedence over the settings fallback. A missing default-path gateway config is initialized once from the committed root `gateway.example.json`.
 - Never commit or expose real API keys, tokens, or credentials.

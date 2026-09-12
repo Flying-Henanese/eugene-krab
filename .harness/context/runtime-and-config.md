@@ -42,9 +42,9 @@ DeepSeek V4 thinking mode is handled in `src/model/llm.ts` for `deepseek-v4-pro`
 
 ## Gateway Config
 
-Gateway config is loaded from `DEXTER_GATEWAY_CONFIG` or `.dexter/gateway.json`. If no file exists, WhatsApp defaults enabled and Feishu defaults disabled. Feishu account credentials come from `FEISHU_APP_ID` and `FEISHU_APP_SECRET`, not from the JSON config.
+Gateway config is loaded from `DEXTER_GATEWAY_CONFIG` or `.dexter/gateway.json`. On first startup with the default path, if `.dexter/gateway.json` is absent and root `gateway.example.json` exists, the validated example is copied to the local path before loading. The committed example mirrors this project's current local configuration by enabling Feishu and its processing card; omitted WhatsApp settings retain the schema default of enabled. If neither local config nor example exists, the in-code fallback enables WhatsApp and disables Feishu. Feishu account credentials come from `FEISHU_APP_ID` and `FEISHU_APP_SECRET`, not from the JSON config.
 
-The gateway config file is optional local state. Missing-file defaults are constructed in `loadGatewayConfig()`; `gateway:login` writes the file only when it needs to persist WhatsApp setup. A repository checkout therefore does not require a committed `.dexter/gateway.json`.
+The gateway config file is gitignored local state. `loadGatewayConfig()` seeds it from the root example only when using the default path and never overwrites an existing file. Explicit override paths remain caller-managed. `gateway:login` may also write the local file when it needs to persist WhatsApp setup.
 
 ## Local State
 

@@ -6,6 +6,7 @@ import { dexterPath } from '../utils/paths.js';
 import { getSetting } from '../utils/config.js';
 
 const DEFAULT_GATEWAY_PATH = dexterPath('gateway.json');
+const DEFAULT_GATEWAY_EXAMPLE_PATH = 'gateway.example.json';
 export const DEFAULT_FEISHU_PROCESSING_TEXT = '正在分析中，请稍候…';
 const DmPolicySchema = z.enum(['pairing', 'allowlist', 'open', 'disabled']);
 const GroupPolicySchema = z.enum(['open', 'allowlist', 'disabled']);
@@ -174,6 +175,17 @@ export function getGatewayConfigPath(overridePath?: string): string {
 
 export function loadGatewayConfig(overridePath?: string): GatewayConfig {
   const path = getGatewayConfigPath(overridePath);
+  if (
+    !existsSync(path) &&
+    overridePath === undefined &&
+    process.env.DEXTER_GATEWAY_CONFIG === undefined &&
+    existsSync(DEFAULT_GATEWAY_EXAMPLE_PATH)
+  ) {
+    const example = readFileSync(DEFAULT_GATEWAY_EXAMPLE_PATH, 'utf8');
+    GatewayConfigSchema.parse(JSON.parse(example));
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, example, 'utf8');
+  }
   if (!existsSync(path)) {
     return {
       gateway: { accountId: 'default', logLevel: 'info' },
