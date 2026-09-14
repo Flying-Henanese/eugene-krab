@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'bun:test';
-import { getToolRegistry } from './registry.js';
+import { getToolRegistry, getTools } from './registry.js';
 
 const originalTushareToken = process.env.TUSHARE_TOKEN;
 const originalTavilyKey = process.env.TAVILY_API_KEY;
@@ -83,5 +83,34 @@ describe('Tushare tool registration', () => {
 
     expect(registry.some((tool) => tool.name === 'web_search')).toBe(true);
     expect(registry.some((tool) => tool.name === 'a_share_analysis')).toBe(false);
+  });
+
+  test('binds cron as a serial context-bound mutation tool', () => {
+    const cron = getToolRegistry('gpt-5.5').find((tool) => tool.name === 'cron');
+
+    expect(cron).toBeDefined();
+    expect(cron?.concurrencySafe).toBe(false);
+    expect(cron?.description).toContain('owner scope');
+  });
+
+  test('applies a scheduled source policy at the final tool binding seam', () => {
+    process.env.TUSHARE_TOKEN = 'test-token';
+    process.env.TAVILY_API_KEY = 'test-tavily-key';
+    const names = getTools('gpt-5.5', undefined, [
+      'a_share_analysis',
+      'market_sentiment_analysis',
+      'technical_analysis',
+      'financial_calculator',
+    ]).map((tool) => tool.name);
+
+    expect(names).toEqual([
+      'financial_calculator',
+      'technical_analysis',
+      'a_share_analysis',
+      'market_sentiment_analysis',
+    ]);
+    expect(names).not.toContain('web_search');
+    expect(names).not.toContain('cron');
+    expect(names).not.toContain('spawn_subagent');
   });
 });

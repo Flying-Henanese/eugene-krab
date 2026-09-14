@@ -115,7 +115,30 @@ Do not reuse `cleanMarkdownForWhatsApp` for Feishu without checking the rendered
 
 ## Cron And Heartbeat
 
-The first version does not need Feishu delivery for cron or heartbeat unless explicitly requested during implementation. Existing WhatsApp cron behavior can remain unchanged.
+Feishu one-on-one chats support owner-scoped cron tasks. A task created from a
+Feishu message persists the routed `accountId` and `chatId` as both its owner
+scope and its delivery target; it is never delivered by looking up the most
+recent gateway session. Scheduled runs use `sessionKey=cron:<jobId>` and an
+isolated Agent session, so the persisted task prompt is the only business
+context and the originating Feishu conversation history is not reused.
+
+New A-share tasks may persist a structural source policy:
+
+- `tushare_only` binds only the Tushare A-share tools and deterministic
+  `financial_calculator`, with no web search capability.
+- `tushare_plus_news` adds at most one `web_search` and one `web_fetch` per
+  run for current Chinese news, policy, or announcement context.
+
+Task management remains conversational (`list`, `add`, `update`, `remove`, and
+`run`) and is scoped to the creating Feishu account/chat. The persisted cron
+store is version 2 and reads version-1 targetless jobs as explicit legacy
+records. Such records are never rebound to Feishu implicitly.
+
+The global heartbeat remains a separate compatibility path. It is not bound to
+Feishu activity; when its legacy WhatsApp path is used, it considers WhatsApp
+sessions only. Other version-1 targetless jobs retain the same explicit
+WhatsApp-only compatibility path, never a Feishu fallback. Per-user Feishu
+heartbeat delivery is out of scope.
 
 ## Non-Goals
 
@@ -126,6 +149,8 @@ The first version does not need Feishu delivery for cron or heartbeat unless exp
 - No media upload or file handling.
 - No interactive message buttons.
 - No migration of WhatsApp internals beyond what is necessary for Feishu.
+- No Feishu group-chat cron tasks, callback-based cron management, or implicit
+  delivery to a recent Feishu chat.
 
 ## Testing
 
@@ -137,6 +162,10 @@ Unit/static tests should cover:
 - Non-text events are ignored.
 - Route session keys include `feishu`.
 - Feishu channel profile resolves.
+- Feishu cron task creation persists the owner and delivery chat, scopes
+  management to that owner, and uses isolated execution.
+- Cron delivery uses the persisted Feishu target and never falls back to
+  session recency; legacy heartbeat behavior remains WhatsApp-only.
 
 Manual integration test:
 

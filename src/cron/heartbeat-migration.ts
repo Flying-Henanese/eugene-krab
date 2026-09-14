@@ -21,7 +21,12 @@ export async function ensureHeartbeatCronJob(configPath?: string): Promise<void>
   if (!hb?.enabled) return;
 
   const store = loadCronStore();
-  const existing = store.jobs.find((j) => j.name === HEARTBEAT_JOB_NAME);
+  const existing = store.jobs.find(
+    (j) => j.name === HEARTBEAT_JOB_NAME &&
+      j.legacy?.kind === 'heartbeat' &&
+      !j.owner &&
+      !j.deliveryTarget,
+  );
 
   // Build the heartbeat query from HEARTBEAT.md (or defaults)
   const query = await buildHeartbeatQuery();
@@ -48,6 +53,7 @@ export async function ensureHeartbeatCronJob(configPath?: string): Promise<void>
       existing.state.consecutiveErrors = 0;
       existing.state.scheduleErrorCount = 0;
     }
+    existing.legacy = { kind: 'heartbeat' };
     if (!existing.state.nextRunAtMs) {
       existing.state.nextRunAtMs = computeNextRunAtMs(existing.schedule, Date.now());
     }
@@ -85,6 +91,7 @@ export async function ensureHeartbeatCronJob(configPath?: string): Promise<void>
       consecutiveErrors: 0,
       scheduleErrorCount: 0,
     },
+    legacy: { kind: 'heartbeat' },
   };
 
   store.jobs.push(job);

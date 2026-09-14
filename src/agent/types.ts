@@ -3,6 +3,7 @@ import type { MessageQueue } from '../utils/message-queue.js';
 import type { Question, UserAnswers } from '../tools/ask-user-question/types.js';
 import type { ReasoningEffort } from '../model/llm.js';
 import type { ToolExecutionBudgetConfig } from './tool-budget.js';
+import type { ToolRuntimeContext } from './tool-context.js';
 
 // ============================================================================
 // Channel Profiles
@@ -51,6 +52,8 @@ export interface AgentConfig {
   signal?: AbortSignal;
   /** Delivery channel (e.g., 'whatsapp', 'cli') — affects response formatting */
   channel?: string;
+  /** Trusted per-run context for context-bound tools such as cron. */
+  toolContext?: ToolRuntimeContext;
   /** Group chat context — when set, adds group-specific instructions to system prompt */
   groupContext?: GroupContext;
   /** Called when a tool needs explicit user approval to proceed */

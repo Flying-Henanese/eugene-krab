@@ -349,9 +349,9 @@ const DEFAULT_FACTORY: ModelFactory = (name, opts) =>
 export function getChatModel(
   modelName: string = DEFAULT_MODEL,
   streaming: boolean = false,
-  options: { reasoningEffort?: ReasoningEffort } = {},
+  options: { reasoningEffort?: ReasoningEffort; provider?: string } = {},
 ): BaseChatModel {
-  const provider = resolveProvider(modelName);
+  const provider = (options.provider ? getProviderById(options.provider) : undefined) ?? resolveProvider(modelName);
   const opts: ModelOpts = (provider.id === 'deepseek' || provider.id === 'glm') && options.reasoningEffort
     ? { streaming, reasoningEffort: options.reasoningEffort }
     : { streaming };
@@ -359,8 +359,13 @@ export function getChatModel(
   return factory(modelName, opts);
 }
 
+function resolveCallProvider(model: string, modelProvider?: string) {
+  return (modelProvider ? getProviderById(modelProvider) : undefined) ?? resolveProvider(model);
+}
+
 interface CallLlmOptions {
   model?: string;
+  modelProvider?: string;
   systemPrompt?: string;
   outputSchema?: z.ZodType<unknown>;
   tools?: StructuredToolInterface[];
@@ -422,10 +427,10 @@ function buildAnthropicMessages(systemPrompt: string, userPrompt: string) {
 }
 
 export async function callLlm(prompt: string, options: CallLlmOptions = {}): Promise<LlmResult> {
-  const { model = DEFAULT_MODEL, systemPrompt, outputSchema, tools, signal, reasoningEffort } = options;
+  const { model = DEFAULT_MODEL, modelProvider, systemPrompt, outputSchema, tools, signal, reasoningEffort } = options;
   const finalSystemPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
-  const llm = getChatModel(model, false, { reasoningEffort });
+  const llm = getChatModel(model, false, { reasoningEffort, provider: modelProvider });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runnable: Runnable<any, any> = llm;
@@ -437,7 +442,7 @@ export async function callLlm(prompt: string, options: CallLlmOptions = {}): Pro
   }
 
   const invokeOpts = signal ? { signal } : undefined;
-  const provider = resolveProvider(model);
+  const provider = resolveCallProvider(model, modelProvider);
   let result;
 
   if (provider.id === 'anthropic') {
@@ -496,6 +501,7 @@ function annotateSystemMessageForCaching(messages: BaseMessage[]): BaseMessage[]
 
 interface CallLlmWithMessagesOptions {
   model?: string;
+  modelProvider?: string;
   tools?: StructuredToolInterface[];
   signal?: AbortSignal;
   reasoningEffort?: ReasoningEffort;
@@ -516,9 +522,9 @@ export async function callLlmWithMessages(
   messages: BaseMessage[],
   options: CallLlmWithMessagesOptions = {},
 ): Promise<LlmResult> {
-  const { model = DEFAULT_MODEL, tools, signal, reasoningEffort } = options;
+  const { model = DEFAULT_MODEL, modelProvider, tools, signal, reasoningEffort } = options;
 
-  const llm = getChatModel(model, false, { reasoningEffort });
+  const llm = getChatModel(model, false, { reasoningEffort, provider: modelProvider });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runnable: Runnable<any, any> = llm;
@@ -528,7 +534,7 @@ export async function callLlmWithMessages(
   }
 
   const invokeOpts = signal ? { signal } : undefined;
-  const provider = resolveProvider(model);
+  const provider = resolveCallProvider(model, modelProvider);
 
   // For Anthropic: annotate SystemMessage with cache_control for prompt caching
   const finalMessages = provider.id === 'anthropic'
@@ -567,9 +573,9 @@ export async function* streamLlmWithMessages(
   messages: BaseMessage[],
   options: CallLlmWithMessagesOptions = {},
 ): AsyncGenerator<AIMessageChunk, void> {
-  const { model = DEFAULT_MODEL, tools, signal, reasoningEffort } = options;
+  const { model = DEFAULT_MODEL, modelProvider, tools, signal, reasoningEffort } = options;
 
-  const llm = getChatModel(model, true, { reasoningEffort });
+  const llm = getChatModel(model, true, { reasoningEffort, provider: modelProvider });
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let runnable: Runnable<any, any> = llm;
@@ -579,7 +585,7 @@ export async function* streamLlmWithMessages(
   }
 
   const invokeOpts = signal ? { signal } : undefined;
-  const provider = resolveProvider(model);
+  const provider = resolveCallProvider(model, modelProvider);
 
   const finalMessages = provider.id === 'anthropic'
     ? annotateSystemMessageForCaching(messages)

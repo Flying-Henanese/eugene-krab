@@ -23,6 +23,8 @@ export type {
   DoneEvent,
 } from './types.js';
 
+export type { ToolRuntimeContext } from './tool-context.js';
+
 export type { 
   ToolCallRecord, 
   ScratchpadEntry,

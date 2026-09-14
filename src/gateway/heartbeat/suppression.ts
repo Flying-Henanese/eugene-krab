@@ -58,6 +58,7 @@ function looksLikeNoAction(text: string): boolean {
 export function evaluateSuppression(
   text: string,
   state: SuppressionState,
+  nowMs: number = Date.now(),
 ): SuppressionResult {
   const trimmed = text.trim();
 
@@ -87,7 +88,7 @@ export function evaluateSuppression(
   if (
     state.lastMessageText !== null &&
     state.lastMessageAt !== null &&
-    Date.now() - state.lastMessageAt < DUPLICATE_WINDOW_MS &&
+    nowMs - state.lastMessageAt < DUPLICATE_WINDOW_MS &&
     cleaned === state.lastMessageText
   ) {
     return { shouldSuppress: true, cleanedText: cleaned, reason: 'duplicate' };

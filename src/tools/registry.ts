@@ -32,7 +32,8 @@ import {
   TECHNICAL_ANALYSIS_DESCRIPTION,
 } from './finance/technical-analysis/index.js';
 import { heartbeatTool, HEARTBEAT_TOOL_DESCRIPTION } from './heartbeat/heartbeat-tool.js';
-import { cronTool, CRON_TOOL_DESCRIPTION } from './cron/cron-tool.js';
+import { createCronTool, CRON_TOOL_DESCRIPTION } from './cron/cron-tool.js';
+import type { ToolRuntimeContext } from '../agent/tool-context.js';
 import { memoryGetTool, MEMORY_GET_DESCRIPTION, memorySearchTool, MEMORY_SEARCH_DESCRIPTION, memoryUpdateTool, MEMORY_UPDATE_DESCRIPTION } from './memory/index.js';
 import { discoverSkills } from '../skills/index.js';
 import { createSpawnSubagent, SPAWN_SUBAGENT_DESCRIPTION } from './subagent/spawn-subagent.js';
@@ -61,7 +62,7 @@ export interface RegisteredTool {
  * @param model - The model name (needed for tools that require model-specific configuration)
  * @returns Array of registered tools
  */
-export function getToolRegistry(model: string): RegisteredTool[] {
+export function getToolRegistry(model: string, toolContext?: ToolRuntimeContext): RegisteredTool[] {
   const tools: RegisteredTool[] = [
     {
       name: 'get_financials',
@@ -152,14 +153,14 @@ export function getToolRegistry(model: string): RegisteredTool[] {
       tool: heartbeatTool,
       description: HEARTBEAT_TOOL_DESCRIPTION,
       compactDescription: 'View or update the periodic heartbeat checklist (.dexter/HEARTBEAT.md).',
-      concurrencySafe: true,
+      concurrencySafe: false,
     },
     {
       name: 'cron',
-      tool: cronTool,
+      tool: createCronTool({ caller: toolContext?.scheduledTaskCaller }),
       description: CRON_TOOL_DESCRIPTION,
-      compactDescription: 'Manage scheduled cron jobs (create, list, update, delete).',
-      concurrencySafe: true,
+      compactDescription: 'Manage owner-scoped scheduled cron jobs; Feishu jobs persist their exact chat target and run in isolation.',
+      concurrencySafe: false,
     },
     {
       name: 'memory_search',
@@ -269,8 +270,8 @@ export function getToolRegistry(model: string): RegisteredTool[] {
 /**
  * Build a name → concurrencySafe map for the tool executor.
  */
-export function getToolConcurrencyMap(model: string): Map<string, boolean> {
-  return new Map(getToolRegistry(model).map(t => [t.name, t.concurrencySafe]));
+export function getToolConcurrencyMap(model: string, toolContext?: ToolRuntimeContext): Map<string, boolean> {
+  return new Map(getToolRegistry(model, toolContext).map(t => [t.name, t.concurrencySafe]));
 }
 
 /**
@@ -279,8 +280,14 @@ export function getToolConcurrencyMap(model: string): Map<string, boolean> {
  * @param model - The model name
  * @returns Array of tool instances
  */
-export function getTools(model: string): StructuredToolInterface[] {
-  return getToolRegistry(model).map((t) => t.tool);
+export function getTools(
+  model: string,
+  toolContext?: ToolRuntimeContext,
+  toolAllowlist?: readonly string[],
+): StructuredToolInterface[] {
+  return getToolRegistry(model, toolContext)
+    .filter((t) => !toolAllowlist || toolAllowlist.includes(t.name))
+    .map((t) => t.tool);
 }
 
 /**
@@ -295,8 +302,12 @@ export function getTools(model: string): StructuredToolInterface[] {
  * Uses 1-2 sentence descriptions instead of full multi-paragraph ones.
  * The LLM already has full tool schemas via bindTools().
  */
-export function buildCompactToolDescriptions(model: string): string {
+export function buildCompactToolDescriptions(
+  model: string,
+  toolAllowlist?: readonly string[],
+): string {
   return getToolRegistry(model)
+    .filter((t) => !toolAllowlist || toolAllowlist.includes(t.name))
     .map((t) => `- **${t.name}**: ${t.compactDescription}`)
     .join('\n');
 }

@@ -57,6 +57,25 @@ function createDependencies(overrides: Partial<Dependencies> = {}): Dependencies
 }
 
 describe('Feishu processing card lifecycle', () => {
+  test('passes trusted Feishu ownership context into the agent run', async () => {
+    let request: Parameters<Dependencies['runAgentForMessage']>[0] | undefined;
+    await handleFeishuInbound(cfg, inbound, createDependencies({
+      runAgentForMessage: async (nextRequest) => {
+        request = nextRequest;
+        return 'answer';
+      },
+    }));
+
+    expect(request?.toolContext).toEqual({
+      scheduledTaskCaller: {
+        channel: 'feishu',
+        accountId: 'default',
+        chatId: 'oc_chat',
+        agentId: 'default',
+      },
+    });
+  });
+
   test('does not create another card while the session is busy', async () => {
     let enqueued = 0;
     let created = 0;

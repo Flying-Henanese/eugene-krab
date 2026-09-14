@@ -4,6 +4,8 @@ import { createMessageQueue, type MessageQueue, type QueuePriority } from '../ut
 import { HEARTBEAT_OK_TOKEN } from './heartbeat/suppression.js';
 import type { AgentEvent } from '../agent/types.js';
 import type { GroupContext } from '../agent/prompts.js';
+import type { ToolRuntimeContext } from '../agent/tool-context.js';
+import type { ToolExecutionBudgetConfig } from '../agent/tool-budget.js';
 
 type SessionState = {
   history: InMemoryChatHistory;
@@ -79,6 +81,14 @@ export type AgentRunRequest = {
   isolatedSession?: boolean;
   channel?: string;
   groupContext?: GroupContext;
+  /** Trusted context used to bind context-sensitive tools to this run. */
+  toolContext?: ToolRuntimeContext;
+  /** Optional structural tool restriction for this run. */
+  toolAllowlist?: string[];
+  /** Optional hard per-run tool execution budget. */
+  toolExecutionBudget?: ToolExecutionBudgetConfig;
+  /** Reserve the final allowed iteration for synthesis. */
+  reserveFinalIteration?: boolean;
 };
 
 export async function runAgentForMessage(req: AgentRunRequest): Promise<string> {
@@ -100,6 +110,10 @@ export async function runAgentForMessage(req: AgentRunRequest): Promise<string> 
         signal: req.signal,
         channel: req.channel,
         groupContext: req.groupContext,
+        toolContext: req.toolContext,
+        toolAllowlist: req.toolAllowlist,
+        toolExecutionBudget: req.toolExecutionBudget,
+        reserveFinalIteration: req.reserveFinalIteration,
         memoryEnabled: !isolated,
         messageQueue: session?.queue,
       });
@@ -124,6 +138,10 @@ export async function runAgentForMessage(req: AgentRunRequest): Promise<string> 
           signal: req.signal,
           channel: req.channel,
           groupContext: req.groupContext,
+          toolContext: req.toolContext,
+          toolAllowlist: req.toolAllowlist,
+          toolExecutionBudget: req.toolExecutionBudget,
+          reserveFinalIteration: req.reserveFinalIteration,
           memoryEnabled: !isolated,
           messageQueue: session.queue,
         });

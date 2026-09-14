@@ -1,255 +1,436 @@
 import { appendFileSync } from 'node:fs';
-import { runAgentForMessage } from '../gateway/agent-runner.js';
+import { runAgentForMessage, type AgentRunRequest } from '../gateway/agent-runner.js';
+import {
+  loadGatewayConfig,
+  resolveGatewayAgentModel,
+} from '../gateway/config.js';
 import {
   evaluateSuppression,
   HEARTBEAT_OK_TOKEN,
   type SuppressionState,
 } from '../gateway/heartbeat/suppression.js';
-import { assertOutboundAllowed, sendMessageWhatsApp } from '../gateway/channels/whatsapp/index.js';
-import { resolveSessionStorePath, loadSessionStore, type SessionEntry } from '../gateway/sessions/store.js';
 import { cleanMarkdownForWhatsApp } from '../gateway/utils.js';
-import { getSetting } from '../utils/config.js';
 import { dexterPath } from '../utils/paths.js';
-import { saveCronStore } from './store.js';
 import { computeNextRunAtMs } from './schedule.js';
-import type { ActiveHours, CronJob, CronStore } from './types.js';
+import { createCronResultDelivery, type CronResultDelivery } from './delivery.js';
+import { saveCronStore } from './store.js';
+import type { ActiveHours, AShareSourcePolicy, CronJob, CronStore } from './types.js';
 
 const LOG_PATH = dexterPath('gateway-debug.log');
 
-function debugLog(msg: string) {
+function debugLog(msg: string): void {
   appendFileSync(LOG_PATH, `${new Date().toISOString()} ${msg}\n`);
 }
 
-// Per-job suppression state (in memory, resets on process restart)
-const suppressionStates = new Map<string, SuppressionState>();
-
 const BACKOFF_SCHEDULE_MS = [
-  30_000,      // 1st error → 30s
-  60_000,      // 2nd → 1 min
-  5 * 60_000,  // 3rd → 5 min
-  15 * 60_000, // 4th → 15 min
-  60 * 60_000, // 5th+ → 60 min
+  30_000,
+  60_000,
+  5 * 60_000,
+  15 * 60_000,
+  60 * 60_000,
 ];
 
 const MAX_AT_RETRIES = 3;
-const SCHEDULE_ERROR_DISABLE_THRESHOLD = 3;
+const FEISHU_TASK_TIMEZONE = 'Asia/Shanghai';
+const LEGACY_ACTIVE_HOURS_TIMEZONE = 'America/New_York';
 
-function getSuppressionState(jobId: string): SuppressionState {
-  let state = suppressionStates.get(jobId);
-  if (!state) {
-    state = { lastMessageText: null, lastMessageAt: null };
-    suppressionStates.set(jobId, state);
-  }
-  return state;
-}
+export const TUSHARE_ONLY_TOOLS = [
+  'a_share_analysis',
+  'market_sentiment_analysis',
+  'technical_analysis',
+  'financial_calculator',
+] as const;
 
-/**
- * Check if the current time is within configured active hours and days.
- */
-function isWithinActiveHours(activeHours?: ActiveHours): boolean {
-  if (!activeHours) return true;
+export const TUSHARE_PLUS_NEWS_TOOLS = [
+  ...TUSHARE_ONLY_TOOLS,
+  'web_search',
+  'web_fetch',
+] as const;
 
-  const tz = activeHours.timezone ?? 'America/New_York';
-  const now = new Date();
+type Clock = () => number;
+type ModelResolution = { model: string; modelProvider: string };
 
-  const allowedDays = activeHours.daysOfWeek ?? [1, 2, 3, 4, 5];
-  const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' });
-  const dayStr = dayFormatter.format(now);
-  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const currentDay = dayMap[dayStr] ?? now.getDay();
-  if (!allowedDays.includes(currentDay)) return false;
+export type CronExecutorDependencies = {
+  now?: Clock;
+  runAgent?: (request: AgentRunRequest) => Promise<string>;
+  delivery?: CronResultDelivery;
+  saveStore?: (store: CronStore) => void;
+  resolveModel?: (job: CronJob, configPath?: string) => ModelResolution;
+  suppressionStates?: Map<string, SuppressionState>;
+};
 
-  const timeFormatter = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-  const currentTime = timeFormatter.format(now);
-  return currentTime >= activeHours.start && currentTime <= activeHours.end;
-}
+export type CronExecutorParams = {
+  configPath?: string;
+};
 
-function errorBackoffMs(consecutiveErrors: number): number {
-  const idx = Math.min(consecutiveErrors - 1, BACKOFF_SCHEDULE_MS.length - 1);
-  return BACKOFF_SCHEDULE_MS[Math.max(0, idx)];
-}
+const defaultSuppressionStates = new Map<string, SuppressionState>();
 
 /**
- * Find the most recently updated session with a delivery target.
- * Same pattern as heartbeat runner.
- */
-function findTargetSession(): SessionEntry | null {
-  const storePath = resolveSessionStorePath('default');
-  const store = loadSessionStore(storePath);
-  const entries = Object.values(store).filter((e) => e.lastTo);
-  if (entries.length === 0) return null;
-  entries.sort((a, b) => b.updatedAt - a.updatedAt);
-  return entries[0];
-}
-
-/**
- * Execute a single cron job: run isolated agent, evaluate suppression,
- * deliver via WhatsApp, apply fulfillment mode, update state.
+ * Execute a target-bound job. The target and channel are read from persisted
+ * state; only explicitly marked legacy records may enter the compatibility
+ * path that consults WhatsApp session recency.
  */
 export async function executeCronJob(
   job: CronJob,
   store: CronStore,
-  _params: { configPath?: string },
+  params: CronExecutorParams = {},
+  dependencies: CronExecutorDependencies = {},
 ): Promise<void> {
-  const startedAt = Date.now();
+  const now = dependencies.now ?? (() => Date.now());
+  const saveStore = dependencies.saveStore ?? saveCronStore;
+  const startedAt = now();
 
-  // 0. Check active hours
-  if (!isWithinActiveHours(job.activeHours)) {
+  if (!isWithinActiveHours(job.activeHours, startedAt, activeHoursTimezoneForJob(job))) {
     debugLog(`[cron] job ${job.id}: outside active hours, skipping`);
-    scheduleNextRun(job, store);
+    scheduleNextRun(job, store, { now, saveStore });
+    return;
+  }
+
+  if (!job.deliveryTarget) {
+    if (job.legacy?.kind === 'heartbeat' || job.legacy?.kind === 'targetless') {
+      const { executeLegacyHeartbeatJob, executeLegacyTargetlessJob } = await import('./legacy-heartbeat.js');
+      const executeLegacyJob = job.legacy.kind === 'heartbeat'
+        ? executeLegacyHeartbeatJob
+        : executeLegacyTargetlessJob;
+      await executeLegacyJob(job, store, params, dependencies);
+      return;
+    }
+    await handleJobError(job, store, new Error('Job has no explicit delivery target; rebind the legacy task before execution.'), startedAt, { now, saveStore });
     return;
   }
 
   debugLog(`[cron] executing job "${job.name}" (${job.id})`);
 
-  // 1. Find WhatsApp delivery target
-  const session = findTargetSession();
-  if (!session?.lastTo || !session?.lastAccountId) {
-    debugLog(`[cron] job ${job.id}: no delivery target, skipping`);
-    scheduleNextRun(job, store);
-    return;
-  }
+  const resolveModel = dependencies.resolveModel ?? ((currentJob, configPath) => {
+    const cfg = loadGatewayConfig(configPath);
+    return resolveGatewayAgentModel(cfg, {
+      model: currentJob.payload.model,
+      modelProvider: currentJob.payload.modelProvider,
+    });
+  });
+  const { model, modelProvider } = resolveModel(job, params.configPath);
+  const policy = sourcePolicyConfig(job.execution?.sourcePolicy);
+  const notificationMode = job.execution?.notificationMode ?? 'on_actionable_result';
+  const query = buildCronQuery(job, notificationMode, policy);
+  const runAgent = dependencies.runAgent ?? runAgentForMessage;
 
-  // 2. Verify outbound allowed
-  try {
-    assertOutboundAllowed({ to: session.lastTo, accountId: session.lastAccountId });
-  } catch {
-    debugLog(`[cron] job ${job.id}: outbound blocked, skipping`);
-    scheduleNextRun(job, store);
-    return;
-  }
-
-  // 3. Resolve model
-  const model = job.payload.model ?? (getSetting('modelId', 'gpt-5.5') as string);
-  const modelProvider = job.payload.modelProvider ?? (getSetting('provider', 'openai') as string);
-
-  // 4. Build query
-  let query = `[CRON JOB: ${job.name}]\n\n${job.payload.message}`;
-  if (job.fulfillment === 'ask') {
-    query += '\n\nIf you find something noteworthy, also ask the user if they want to continue monitoring this.';
-  }
-  query += `\n\n## Instructions\n- If the condition has NOT been met, you MUST respond with exactly: ${HEARTBEAT_OK_TOKEN}\n- Do NOT send a status update or progress report — the user only wants to hear when the condition IS met\n- Do NOT say things like "no action needed", "still below target", "not yet" — just respond ${HEARTBEAT_OK_TOKEN}\n- Only respond with a real message when there is something actionable to report\n- Keep alerts brief and focused — lead with the key finding`;
-
-  // 5. Run agent
   let answer: string;
   try {
-    answer = await runAgentForMessage({
+    answer = await runAgent({
       sessionKey: `cron:${job.id}`,
       query,
       model,
       modelProvider,
       maxIterations: 6,
       isolatedSession: true,
-      channel: 'whatsapp',
+      channel: job.deliveryTarget.channel,
+      ...(policy
+        ? {
+            toolAllowlist: [...policy.toolAllowlist],
+            toolExecutionBudget: policy.toolExecutionBudget,
+            reserveFinalIteration: true,
+          }
+        : {}),
     });
-  } catch (err) {
-    handleJobError(job, store, err, startedAt);
+  } catch (error) {
+    await handleJobError(job, store, error, startedAt, { now, saveStore, configPath: params.configPath, delivery: dependencies.delivery });
     return;
   }
 
-  const durationMs = Date.now() - startedAt;
+  if (/^Error:\s*/i.test(answer.trim())) {
+    await handleJobError(job, store, new Error(answer.trim().replace(/^Error:\s*/i, '')), startedAt, {
+      now,
+      saveStore,
+      configPath: params.configPath,
+      delivery: dependencies.delivery,
+    });
+    return;
+  }
 
-  // 6. Evaluate suppression
-  const suppState = getSuppressionState(job.id);
-  const suppResult = evaluateSuppression(answer, suppState);
-
-  // 7. Update job state
+  const durationMs = Math.max(0, now() - startedAt);
   job.state.lastRunAtMs = startedAt;
   job.state.lastDurationMs = durationMs;
   job.state.consecutiveErrors = 0;
+  job.state.lastError = undefined;
 
-  if (suppResult.shouldSuppress) {
+  const suppressionState = getSuppressionState(job.id, dependencies.suppressionStates ?? defaultSuppressionStates);
+  const suppressionResult = notificationMode === 'on_actionable_result'
+    ? evaluateSuppression(answer, suppressionState, now())
+    : {
+        shouldSuppress: !answer.trim(),
+        cleanedText: answer.trim(),
+        reason: !answer.trim() ? 'empty' as const : 'none' as const,
+      };
+
+  if (suppressionResult.shouldSuppress) {
     job.state.lastRunStatus = 'suppressed';
-    debugLog(`[cron] job ${job.id}: suppressed (${suppResult.reason})`);
-  } else {
-    job.state.lastRunStatus = 'ok';
-
-    // Deliver via WhatsApp
-    const cleaned = cleanMarkdownForWhatsApp(suppResult.cleanedText);
-    await sendMessageWhatsApp({
-      to: session.lastTo,
-      body: cleaned,
-      accountId: session.lastAccountId,
-    });
-    debugLog(`[cron] job ${job.id}: delivered to ${session.lastTo}`);
-
-    // Update suppression state for duplicate detection
-    suppState.lastMessageText = suppResult.cleanedText;
-    suppState.lastMessageAt = Date.now();
-
-    // Apply fulfillment mode
-    if (job.fulfillment === 'once') {
-      job.enabled = false;
-      job.state.nextRunAtMs = undefined;
-      debugLog(`[cron] job ${job.id}: auto-disabled (fulfillment=once)`);
-      job.updatedAtMs = Date.now();
-      saveCronStore(store);
-      return;
-    }
+    job.state.lastSuppressionReason = suppressionResult.reason;
+    debugLog(`[cron] job ${job.id}: suppressed (${suppressionResult.reason})`);
+    scheduleAfterResult(job, store, { now, saveStore, suppressed: true });
+    return;
   }
 
-  scheduleNextRun(job, store);
-}
-
-function scheduleNextRun(job: CronJob, store: CronStore): void {
-  const now = Date.now();
+  const body = job.deliveryTarget.channel === 'whatsapp'
+    ? cleanMarkdownForWhatsApp(suppressionResult.cleanedText)
+    : suppressionResult.cleanedText;
+  const delivery = dependencies.delivery ?? createCronResultDelivery({ configPath: params.configPath });
 
   try {
-    const nextRun = computeNextRunAtMs(job.schedule, now);
-    if (nextRun === undefined) {
-      // One-shot expired or invalid schedule
-      job.enabled = false;
-      job.state.nextRunAtMs = undefined;
-    } else {
-      job.state.nextRunAtMs = nextRun;
-    }
-    job.state.scheduleErrorCount = 0;
-  } catch {
-    job.state.scheduleErrorCount += 1;
-    if (job.state.scheduleErrorCount >= SCHEDULE_ERROR_DISABLE_THRESHOLD) {
-      job.enabled = false;
-      job.state.nextRunAtMs = undefined;
-      debugLog(`[cron] job ${job.id}: disabled after ${SCHEDULE_ERROR_DISABLE_THRESHOLD} schedule errors`);
-    }
+    await delivery.deliver(job.deliveryTarget, body);
+  } catch (error) {
+    await handleJobError(job, store, error, startedAt, { now, saveStore, configPath: params.configPath, delivery });
+    return;
   }
 
-  job.updatedAtMs = Date.now();
-  saveCronStore(store);
+  job.state.lastRunStatus = 'ok';
+  job.state.lastSuppressionReason = undefined;
+  job.state.consecutiveErrors = 0;
+  if (notificationMode === 'on_actionable_result') {
+    suppressionState.lastMessageText = suppressionResult.cleanedText;
+    suppressionState.lastMessageAt = now();
+  }
+  debugLog(`[cron] job ${job.id}: delivered to ${formatTarget(job)}`);
+
+  if (job.fulfillment === 'once') {
+    job.enabled = false;
+    job.state.nextRunAtMs = undefined;
+    job.updatedAtMs = now();
+    saveStore(store);
+    debugLog(`[cron] job ${job.id}: auto-disabled (fulfillment=once)`);
+    return;
+  }
+
+  scheduleAfterResult(job, store, { now, saveStore, suppressed: false });
 }
 
-function handleJobError(job: CronJob, store: CronStore, err: unknown, startedAt: number): void {
-  const errorMsg = err instanceof Error ? err.message : String(err);
+export function buildCronQuery(
+  job: CronJob,
+  notificationMode: 'always' | 'on_actionable_result',
+  policy?: ReturnType<typeof sourcePolicyConfig>,
+): string {
+  let query = `[CRON JOB: ${job.name}]\n\n${job.payload.message}`;
+  if (job.fulfillment === 'ask') {
+    query += '\n\nIf you find something noteworthy, also ask the user if they want to continue monitoring this.';
+  }
+  if (policy) query += `\n\n${policy.prompt}`;
+
+  if (notificationMode === 'always') {
+    query += '\n\n## Notification instructions\n- This is a scheduled report, not an alert-only monitor. Return a concise nonempty report on every successful run.\n- Do not return HEARTBEAT_OK just because there is no exceptional event; summarize the requested scheduled check.\n- Keep the report focused and suitable for the delivery channel.';
+  } else {
+    query += `\n\n## Notification instructions\n- If the condition has NOT been met, respond with exactly: ${HEARTBEAT_OK_TOKEN}\n- Do NOT send a status update or progress report — the user only wants to hear when the condition IS met\n- Do NOT say things like "no action needed", "still below target", "not yet" — just respond ${HEARTBEAT_OK_TOKEN}\n- Only respond with a real message when there is something actionable to report\n- Keep alerts brief and focused — lead with the key finding`;
+  }
+  return query;
+}
+
+export function sourcePolicyConfig(policy?: AShareSourcePolicy): {
+  toolAllowlist: readonly string[];
+  toolExecutionBudget: { maxTotalExecutions: number; perTool?: Record<string, number> };
+  prompt: string;
+} | undefined {
+  if (!policy) return undefined;
+  if (policy === 'tushare_only') {
+    return {
+      toolAllowlist: TUSHARE_ONLY_TOOLS,
+      toolExecutionBudget: { maxTotalExecutions: 4 },
+      prompt: '## Data source policy\n- Use only the bound Tushare A-share tools and financial_calculator.\n- Do not search the web, fetch URLs, browse, or use generic market-data tools; those tools are unavailable for this run.\n- Omit current-news, policy, and company-event explanations rather than inferring them. If such context matters, state that news was not queried.\n- Treat the persisted task prompt as the only business context; do not rely on the originating Feishu conversation.',
+    };
+  }
+  return {
+    toolAllowlist: TUSHARE_PLUS_NEWS_TOOLS,
+    toolExecutionBudget: { maxTotalExecutions: 6, perTool: { web_search: 1, web_fetch: 1 } },
+    prompt: '## Data source policy\n- Use the bound Tushare A-share tools for structured data.\n- You may make at most one web_search for the most material current Chinese news, policy, or announcement query, and at most one web_fetch to verify one returned URL.\n- Name source limitations when the single search cannot establish a claim; do not imply broader news coverage than the evidence supports.\n- Treat the persisted task prompt as the only business context; do not rely on the originating Feishu conversation.',
+  };
+}
+
+function getSuppressionState(
+  jobId: string,
+  states: Map<string, SuppressionState>,
+): SuppressionState {
+  let state = states.get(jobId);
+  if (!state) {
+    state = { lastMessageText: null, lastMessageAt: null };
+    states.set(jobId, state);
+  }
+  return state;
+}
+
+function isWithinActiveHours(
+  activeHours: ActiveHours | undefined,
+  nowMs: number,
+  defaultTimezone: string,
+): boolean {
+  if (!activeHours) return true;
+
+  const tz = activeHours.timezone ?? defaultTimezone;
+  const now = new Date(nowMs);
+  const allowedDays = activeHours.daysOfWeek ?? [1, 2, 3, 4, 5];
+  const dayFormatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' });
+  const dayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  if (!allowedDays.includes(dayMap[dayFormatter.format(now)] ?? now.getDay())) return false;
+
+  const currentTime = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(now);
+  return currentTime >= activeHours.start && currentTime <= activeHours.end;
+}
+
+function scheduleAfterResult(
+  job: CronJob,
+  store: CronStore,
+  params: { now: Clock; saveStore: (store: CronStore) => void; suppressed: boolean },
+): void {
+  const nowMs = params.now();
+  const nextRun = computeNextRunAtMs(job.schedule, nowMs, scheduleTimezoneForJob(job));
+  if (nextRun === undefined) {
+    if (params.suppressed && job.fulfillment === 'once') {
+      // A one-shot condition was checked but did not produce an alert. Keep it
+      // enabled and visible for an explicit user update instead of claiming it
+      // was fulfilled or silently disabling it after a suppressed result.
+      job.state.nextRunAtMs = undefined;
+      job.state.lastError = 'One-shot check produced no actionable result; task remains enabled for explicit review.';
+    } else {
+      job.enabled = false;
+      job.state.nextRunAtMs = undefined;
+    }
+  } else {
+    job.state.nextRunAtMs = nextRun;
+  }
+  job.state.scheduleErrorCount = 0;
+  job.updatedAtMs = nowMs;
+  params.saveStore(store);
+}
+
+function scheduleNextRun(
+  job: CronJob,
+  store: CronStore,
+  params: { now: Clock; saveStore: (store: CronStore) => void },
+): void {
+  const nextRun = computeNextRunAtMs(job.schedule, params.now(), scheduleTimezoneForJob(job));
+  if (nextRun === undefined) {
+    job.enabled = false;
+    job.state.nextRunAtMs = undefined;
+  } else {
+    job.state.nextRunAtMs = nextRun;
+  }
+  job.state.scheduleErrorCount = 0;
+  job.updatedAtMs = params.now();
+  params.saveStore(store);
+}
+
+async function handleJobError(
+  job: CronJob,
+  store: CronStore,
+  error: unknown,
+  startedAt: number,
+  params: {
+    now: Clock;
+    saveStore: (store: CronStore) => void;
+    configPath?: string;
+    delivery?: CronResultDelivery;
+  },
+): Promise<void> {
+  const errorMsg = safeCronErrorMessage(error);
   job.state.lastRunAtMs = startedAt;
-  job.state.lastDurationMs = Date.now() - startedAt;
+  job.state.lastDurationMs = Math.max(0, params.now() - startedAt);
   job.state.lastRunStatus = 'error';
+  job.state.lastSuppressionReason = undefined;
   job.state.lastError = errorMsg;
   job.state.consecutiveErrors += 1;
 
   debugLog(`[cron] job ${job.id}: error #${job.state.consecutiveErrors}: ${errorMsg}`);
-
-  const now = Date.now();
+  const nowMs = params.now();
 
   if (job.schedule.kind === 'at') {
-    // One-shot: retry up to MAX_AT_RETRIES, then disable
     if (job.state.consecutiveErrors >= MAX_AT_RETRIES) {
       job.enabled = false;
       job.state.nextRunAtMs = undefined;
       debugLog(`[cron] job ${job.id}: disabled after ${MAX_AT_RETRIES} retries (at job)`);
+      if (job.deliveryTarget && job.state.lastErrorNoticeAtMs === undefined) {
+        const delivery = params.delivery ?? createCronResultDelivery({ configPath: params.configPath });
+        try {
+          const body = `Scheduled task "${job.name}" failed after ${MAX_AT_RETRIES} attempts. Please check the gateway logs.`;
+          await delivery.deliver(job.deliveryTarget, body);
+          job.state.lastErrorNoticeAtMs = nowMs;
+          debugLog(`[cron] job ${job.id}: terminal error notice delivered`);
+        } catch (noticeError) {
+          const noticeMessage = safeCronErrorMessage(noticeError);
+          debugLog(`[cron] job ${job.id}: terminal error notice failed: ${noticeMessage}`);
+        }
+      }
     } else {
-      job.state.nextRunAtMs = now + errorBackoffMs(job.state.consecutiveErrors);
+      job.state.nextRunAtMs = nowMs + errorBackoffMs(job.state.consecutiveErrors);
     }
   } else {
-    // Recurring: apply exponential backoff
-    const normalNext = computeNextRunAtMs(job.schedule, now);
-    const backoff = now + errorBackoffMs(job.state.consecutiveErrors);
+    const normalNext = computeNextRunAtMs(job.schedule, nowMs, scheduleTimezoneForJob(job));
+    const backoff = nowMs + errorBackoffMs(job.state.consecutiveErrors);
     job.state.nextRunAtMs = normalNext ? Math.max(normalNext, backoff) : backoff;
   }
 
-  job.updatedAtMs = Date.now();
-  saveCronStore(store);
+  job.updatedAtMs = nowMs;
+  params.saveStore(store);
+}
+
+function errorBackoffMs(consecutiveErrors: number): number {
+  const index = Math.min(consecutiveErrors - 1, BACKOFF_SCHEDULE_MS.length - 1);
+  return BACKOFF_SCHEDULE_MS[Math.max(0, index)]!;
+}
+
+function formatTarget(job: CronJob): string {
+  if (!job.deliveryTarget) return 'no target';
+  return job.deliveryTarget.channel === 'feishu'
+    ? `Feishu:${job.deliveryTarget.chatId}`
+    : `WhatsApp:${job.deliveryTarget.to}`;
+}
+
+function scheduleTimezoneForJob(job: CronJob): string | undefined {
+  return job.owner?.channel === 'feishu' || job.deliveryTarget?.channel === 'feishu'
+    ? FEISHU_TASK_TIMEZONE
+    : undefined;
+}
+
+function activeHoursTimezoneForJob(job: CronJob): string {
+  return job.owner?.channel === 'feishu' || job.deliveryTarget?.channel === 'feishu'
+    ? FEISHU_TASK_TIMEZONE
+    : LEGACY_ACTIVE_HOURS_TIMEZONE;
+}
+
+function redactSensitiveText(text: string): string {
+  const secrets = [
+    process.env.FEISHU_APP_ID,
+    process.env.FEISHU_APP_SECRET,
+    process.env.TUSHARE_TOKEN,
+    process.env.OPENAI_API_KEY,
+    process.env.ANTHROPIC_API_KEY,
+    process.env.GOOGLE_API_KEY,
+    process.env.XAI_API_KEY,
+    process.env.OPENROUTER_API_KEY,
+    process.env.MOONSHOT_API_KEY,
+    process.env.DEEPSEEK_API_KEY,
+    process.env.GLM_API_KEY,
+    process.env.OLLAMA_CLOUD_API_KEY,
+    process.env.TAVILY_API_KEY,
+    process.env.EXASEARCH_API_KEY,
+    process.env.PERPLEXITY_API_KEY,
+    process.env.LANGSEARCH_API_KEY,
+    process.env.X_BEARER_TOKEN,
+    process.env.LANGSMITH_API_KEY,
+  ].filter((value): value is string => Boolean(value));
+
+  return secrets.reduce((redacted, secret) => redacted.replaceAll(secret, '[REDACTED]'), text);
+}
+
+function safeCronErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const message = redactSensitiveText(raw).replace(/\s+/g, ' ').trim();
+  if (
+    !message ||
+    message.length > 240 ||
+    /api[_ -]?key|access[_ -]?token|authorization|bearer|secret|token\s*[:=]|key\s*[:=]|prompt|chat history|messages?\s*[:=]|content\s*[:=]/i.test(message)
+  ) {
+    return 'Scheduled task failed; diagnostic details were withheld from persisted state.';
+  }
+  return message;
 }

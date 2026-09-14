@@ -31,6 +31,13 @@ Current Feishu behavior:
 - Final card answers are paginated at a 28 KB safety budget and 80 elements per card. The first page replaces the processing card and later pages are sent as numbered continuation cards; without a processing card, long prose and table answers use the same multi-card path while ordinary short prose remains a rich-text post.
 - Falls back to the existing standalone outbound path when processing-card creation or final update fails; empty answers and agent failures are best-effort updates to a terminal card state.
 
+Scheduled Feishu tasks:
+
+- A Feishu Agent run receives immutable trusted caller context containing the routed account, chat, and agent IDs. The cron tool uses that context to persist owner and delivery target; model-generated arguments cannot spoof either field.
+- Feishu cron jobs use `sessionKey=cron:<jobId>` and `isolatedSession=true`. They do not reuse the originating session history and deliver through `CronResultDelivery` to the persisted `chatId`.
+- Target-bound cron delivery never selects a recipient from recent session metadata. Version-1 targetless jobs stay explicit legacy records and use only an explicit WhatsApp compatibility path when needed. The global heartbeat has the same WhatsApp-only boundary and is never redirected to a recent Feishu chat.
+- Actionable-result duplicate suppression remains process-local in this first release; a gateway restart can permit the same alert text once again.
+
 The current scope still excludes group chats, webhooks, images, per-tool progress updates, and project-local allowlists.
 
 ## Gateway Config

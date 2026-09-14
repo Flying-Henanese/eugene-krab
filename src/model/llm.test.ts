@@ -64,6 +64,16 @@ describe('OpenAI API routing', () => {
       }
     }
   });
+
+  test('uses an explicit provider even when the model name has another prefix', () => {
+    process.env.GLM_API_KEY = 'glm-test-key';
+
+    const llm = getChatModel('gpt-5.5', false, { provider: 'glm' }) as unknown as {
+      clientConfig: { baseURL?: string };
+    };
+
+    expect(llm.clientConfig.baseURL).toBe('https://open.bigmodel.cn/api/paas/v4');
+  });
 });
 
 describe('GLM 5.3 Flash routing', () => {

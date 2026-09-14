@@ -193,6 +193,14 @@ async function handleInbound(cfg: GatewayConfig, inbound: WhatsAppInboundMessage
       modelProvider,
       channel: 'whatsapp',
       groupContext,
+      toolContext: {
+        scheduledTaskCaller: {
+          channel: 'whatsapp',
+          accountId: route.accountId,
+          to: isGroup ? inbound.chatId : inbound.replyToJid,
+          agentId: route.agentId,
+        },
+      },
     });
     const durationMs = Date.now() - startedAt;
     debugLog(`[gateway] agent answer length=${answer.length}`);
@@ -321,6 +329,15 @@ export async function handleFeishuInbound(
       model,
       modelProvider,
       channel: 'feishu',
+      toolContext: {
+        scheduledTaskCaller: {
+          channel: 'feishu',
+          accountId: route.accountId,
+          chatId: inbound.chatId,
+          agentId: route.agentId,
+          ...(inbound.senderOpenId ? { senderOpenId: inbound.senderOpenId } : {}),
+        },
+      },
     });
     const durationMs = Date.now() - startedAt;
 

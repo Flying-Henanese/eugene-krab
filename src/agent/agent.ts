@@ -50,6 +50,7 @@ export class Agent {
   private readonly toolExecutor: AgentToolExecutor;
   private readonly systemPrompt: string;
   private readonly signal?: AbortSignal;
+  private readonly modelProvider?: AgentConfig['modelProvider'];
   private readonly memoryEnabled: boolean;
   private readonly messageQueue?: MessageQueue;
   private readonly reasoningEffort?: AgentConfig['reasoningEffort'];
@@ -78,6 +79,7 @@ export class Agent {
     );
     this.systemPrompt = systemPrompt;
     this.signal = config.signal;
+    this.modelProvider = config.modelProvider;
     this.memoryEnabled = config.memoryEnabled ?? true;
     this.messageQueue = config.messageQueue;
     this.reasoningEffort = config.reasoningEffort;
@@ -88,10 +90,7 @@ export class Agent {
 
   static async create(config: AgentConfig = {}): Promise<Agent> {
     const model = config.model ?? DEFAULT_MODEL;
-    const allTools = getTools(model);
-    let tools = config.toolAllowlist
-      ? allTools.filter(t => config.toolAllowlist!.includes(t.name))
-      : allTools;
+    let tools = getTools(model, config.toolContext, config.toolAllowlist);
     // CLI-only tools (interactive prompts) are dropped on non-CLI channels
     // (WhatsApp/gateway) and in headless runs, where there is no user at a keyboard.
     const isCli = !config.channel || config.channel === 'cli';
@@ -100,7 +99,7 @@ export class Agent {
     }
     // The concurrency map is a name→bool lookup; extra entries are harmless since
     // toolMap only holds the (possibly filtered) tools above.
-    const concurrencyMap = getToolConcurrencyMap(model);
+    const concurrencyMap = getToolConcurrencyMap(model, config.toolContext);
 
     let systemPrompt: string;
     if (config.systemPromptOverride) {
@@ -129,6 +128,7 @@ export class Agent {
         memoryFiles,
         memoryContext,
         rulesContent,
+        config.toolAllowlist,
       );
     }
     return new Agent(config, tools, systemPrompt, concurrencyMap);
@@ -367,6 +367,7 @@ export class Agent {
 
     for await (const chunk of streamLlmWithMessages(messages, {
       model: this.model,
+      modelProvider: this.modelProvider,
       tools,
       signal: this.signal,
       reasoningEffort: this.reasoningEffort,
@@ -415,6 +416,7 @@ export class Agent {
   ): Promise<{ response: AIMessage; usage?: TokenUsage }> {
     const result = await callLlmWithMessages(messages, {
       model: this.model,
+      modelProvider: this.modelProvider,
       tools,
       signal: this.signal,
       reasoningEffort: this.reasoningEffort,

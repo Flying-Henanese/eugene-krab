@@ -65,8 +65,20 @@ function ensureHeartbeatEnabled(): void {
  */
 async function syncHeartbeatCronJob(): Promise<void> {
   const store = loadCronStore();
-  const job = store.jobs.find((j) => j.name === HEARTBEAT_JOB_NAME);
+  const job = store.jobs.find(
+    (j) => j.name === HEARTBEAT_JOB_NAME &&
+      j.legacy?.kind === 'heartbeat' &&
+      !j.owner &&
+      !j.deliveryTarget,
+  );
   if (!job) return;
+
+  // The global heartbeat is deliberately not a Feishu-owned task. Keep an
+  // explicit compatibility marker so the runner can use its WhatsApp-only
+  // legacy path without ever binding it to a recent Feishu session.
+  if (!job.owner && !job.deliveryTarget) {
+    job.legacy = { kind: 'heartbeat' };
+  }
 
   const query = await buildHeartbeatQuery();
   if (query === null) {

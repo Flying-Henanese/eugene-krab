@@ -12,13 +12,27 @@ Read this before changing financial research tools, A-share support, search-prov
 - Current market context and news: `web_search`, using Exa, Perplexity, Tavily, or LangSearch based on configured API keys and preference.
 - X/Twitter sentiment: `x_search`, enabled only when `X_BEARER_TOKEN` is set.
 
+Scheduled A-share source policies:
+
+- `tushare_only` requires `TUSHARE_TOKEN`, binds `a_share_analysis`,
+  `market_sentiment_analysis`, `technical_analysis`, and
+  `financial_calculator`, and structurally omits `web_search`, `web_fetch`,
+  browser, generic market data, cron, heartbeat, files, and subagents. The
+  run has a four-tool total budget and must state when current news or policy
+  context was not queried.
+- `tushare_plus_news` requires Tushare plus at least one configured web-search
+  provider. It adds only `web_search` and `web_fetch`, with one call per tool
+  and six total tool executions. Provider selection remains the existing
+  preferred/fallback chain; with only Tavily configured, the single permitted
+  `web_search` is at most one Tavily request.
+
 ## A-Share Guidance
 
 This file is the current working context for A-share analysis. Consult `docs/superpowers/specs/2026-07-02-tushare-tavily-stock-analysis-design.md` only when you need the original design rationale or to revisit the initial scope.
 
 Use Tushare for structured A-share snapshots such as ticker resolution, PE/PB, ROE, revenue, profit, and cash-flow data. Pair it with `web_search` for current Chinese market context when the question asks for recent narrative, policy, sentiment, or news.
 
-`a_share_analysis` uses statement-specific field sets and returns up to eight deduplicated comparison periods, preferring `update_flag=1` when Tushare exposes multiple versions for the same company/period/report type. Its core structured surfaces are `income`, `balancesheet`, `cashflow`, and `fina_indicator`; supplemental evidence comes from `fina_mainbz` by product and region, `fina_audit`, `dividend`, `forecast`, and `express`. Ordinary financial analysis should use these structured endpoints instead of requiring annual-report PDF parsing. Treat Q1/H1/Q3 statement values as reported-period cumulative values unless the upstream field explicitly represents a standalone quarter, and compare like-for-like periods.
+`a_share_analysis` uses statement-specific field sets and returns up to eight deduplicated comparison periods, preferring `update_flag=1` when Tushare exposes multiple versions for the same company/period/report type. Its core structured surfaces are `income`, `balancesheet`, `cashflow`, and `fina_indicator`; supplemental evidence comes from `fina_mainbz` by product and region, `fina_audit`, `dividend`, `forecast`, and `express`. Ordinary current analysis omits `period` and keeps the latest comparison-period behavior. When the user explicitly requests a historical report period, or a workflow needs an exact historical comparison, the main agent may pass `period` as `YYYYMMDD` or `YYYY-MM-DD`; the tool applies that scope only to the four core financial statement surfaces, filters returned rows to the exact period, and does not silently substitute a newer statement. Ordinary financial analysis should use these structured endpoints instead of requiring annual-report PDF parsing. Treat Q1/H1/Q3 statement values as reported-period cumulative values unless the upstream field explicitly represents a standalone quarter, and compare like-for-like periods.
 
 The Tushare operating-cash-flow field is `n_cashflow_act`; `free_cashflow` is a separate upstream field and may be null for some report versions. Do not explain the upstream `free_cashflow` field as operating cash flow minus capex. `a_share_analysis` separately adds `operating_cashflow_less_capex = n_cashflow_act - c_pay_acq_const_fiolta` as a deterministic CNY field. Keep unavailable supplemental APIs recoverable through `unavailable_data` rather than failing the core statement result.
 

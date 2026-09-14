@@ -19,6 +19,42 @@ export type ActiveHours = {
 
 export type FulfillmentMode = 'keep' | 'once' | 'ask';
 
+// --- Ownership, delivery, and execution ---
+
+export type FeishuP2POwner = {
+  channel: 'feishu';
+  accountId: string;
+  chatId: string;
+};
+
+export type WhatsAppOwner = {
+  channel: 'whatsapp';
+  accountId: string;
+  to: string;
+};
+
+export type CronOwner = FeishuP2POwner | WhatsAppOwner;
+
+export type CronDeliveryTarget =
+  | { channel: 'feishu'; accountId: string; chatId: string }
+  | { channel: 'whatsapp'; accountId: string; to: string };
+
+/** Trusted gateway context used when a caller creates or manages a job. */
+export type CronCallerContext =
+  | (FeishuP2POwner & { agentId: string; senderOpenId?: string })
+  | (WhatsAppOwner & { agentId: string });
+
+export type AShareSourcePolicy = 'tushare_only' | 'tushare_plus_news';
+export type CronNotificationMode = 'always' | 'on_actionable_result';
+
+export type CronExecutionPolicy = {
+  sessionMode: 'isolated';
+  sourcePolicy?: AShareSourcePolicy;
+  notificationMode: CronNotificationMode;
+};
+
+export type CronLegacyKind = 'heartbeat' | 'targetless';
+
 // --- Payload ---
 
 export type CronPayload = {
@@ -34,6 +70,8 @@ export type CronJobState = {
   lastRunAtMs?: number;
   lastRunStatus?: 'ok' | 'error' | 'suppressed';
   lastError?: string;
+  lastSuppressionReason?: string;
+  lastErrorNoticeAtMs?: number;
   lastDurationMs?: number;
   consecutiveErrors: number;
   scheduleErrorCount: number;
@@ -52,12 +90,20 @@ export type CronJob = {
   payload: CronPayload;
   fulfillment: FulfillmentMode;
   activeHours?: ActiveHours;
+  /** Absent only for targetless legacy jobs loaded from version 1. */
+  owner?: CronOwner;
+  /** Absent only for targetless legacy jobs loaded from version 1. */
+  deliveryTarget?: CronDeliveryTarget;
+  /** Absent only for targetless legacy jobs loaded from version 1. */
+  execution?: CronExecutionPolicy;
+  /** Explicit compatibility marker for the global heartbeat job. */
+  legacy?: { kind: CronLegacyKind };
   state: CronJobState;
 };
 
 // --- Store ---
 
 export type CronStore = {
-  version: 1;
+  version: 2;
   jobs: CronJob[];
 };

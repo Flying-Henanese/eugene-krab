@@ -14,7 +14,14 @@ Read this before adding or changing agent tools, tool descriptions, skill discov
 
 The registry always includes core finance, browser/fetch/filesystem, memory, cron, heartbeat, subagent, and ask-user-question tools, then conditionally adds provider-backed search and A-share/X search tools based on environment variables.
 
-Main-agent tool choice is model-driven after the tool set is bound. Compact registry descriptions are included in the system prompt, and bound tool schemas/descriptions are also visible to the model. There is no gateway `if` branch that guarantees a technical-analysis call for a particular Chinese phrase, so trigger behavior depends on accurate prompt-visible descriptions and the user's intent being sufficiently explicit.
+Cron is registered through `createCronTool()` for each Agent run. It receives a
+trusted immutable `ToolRuntimeContext` when the run came from a gateway
+conversation, is owner-scoped for Feishu/WhatsApp management, and is marked
+serial because it performs shared JSON store mutations. Scheduled source
+policies additionally filter the final Agent-bound tool list and apply a hard
+per-run execution budget; prompt wording alone is not the enforcement seam.
+
+Main-agent tool choice is model-driven after the tool set is bound. Compact registry descriptions are included in the system prompt, and bound tool schemas/descriptions are also visible to the model. Scheduled source-policy allow-lists filter both the bound tools and their compact prompt descriptions. There is no gateway `if` branch that guarantees a technical-analysis call for a particular Chinese phrase, so trigger behavior depends on accurate prompt-visible descriptions and the user's intent being sufficiently explicit.
 
 ## Conditional Tools
 
