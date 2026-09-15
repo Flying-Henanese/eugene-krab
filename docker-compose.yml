@@ -12,5 +12,6 @@ services:
     volumes:
       - ./src:/app/src
       - ./.dexter:/app/.dexter
+      - ./gateway.example.json:/app/gateway.example.json:ro
     command: >
       sh -lc "xvfb-run -a bun run gateway"
