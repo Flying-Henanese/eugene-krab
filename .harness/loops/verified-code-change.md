@@ -20,12 +20,14 @@ state is reached.
 
 ## Trigger
 
-Enter this loop when the user asks to implement, fix, or refactor code and the
-result can be checked with tests, type checking, static checks, runtime
-evidence, or explicit review criteria.
+Enter this loop when a requested feature, bug fix, or refactor is multi-step,
+must survive a session boundary, has repeated verification failures, or carries
+unusual risk. The result must have verifiable acceptance criteria.
 
-Do not enter when the user asks only for explanation, diagnosis, status, or a
-code review without authorizing a change.
+For a small bounded change, use `.harness/checklists/code-change.md` and
+`.harness/checklists/verification.md` directly without persistent loop state.
+Do not enter for explanation, diagnosis, status, or a code review without an
+authorized change.
 
 ## Entry Conditions
 
@@ -59,7 +61,8 @@ code review without authorizing a change.
 - Finance or A-share work:
   `.harness/context/market-data-sources.md`
 - Domain procedure: the matching file under `.harness/workflows/`
-- Coding, testing, and review expectations: `.harness/standards/`
+- Coding conventions: `.harness/standards/coding.md`
+- Testing and review checks: `.harness/checklists/verification.md`
 
 Load only context relevant to the task and current criterion.
 
@@ -70,9 +73,21 @@ Record the original request, authorized scope, acceptance criteria, current
 phase, changed files, verification evidence, failure signatures, budgets,
 blockers, and terminal status.
 
-The source-state fingerprint should identify the current `HEAD` plus whether
-tracked or untracked working-tree changes exist. If practical, include a diff
-hash. Any edit invalidates affected verification evidence.
+Record the current `HEAD` and whether tracked or untracked working-tree changes
+exist for orientation. These fields alone do not identify the verified contents.
+
+To reuse verification evidence across sessions, store a reproducible content
+fingerprint in the optional `sourceState.diffHash` field. Cover the paths and
+contents of all relevant verification inputs, including implementation, tests,
+configuration, dependency manifests and lockfiles, relevant untracked files,
+and additions or deletions. Record the fingerprint's scope and generation method
+in the verification summary, and bind each verification entry's `sourceState`
+to the verified `HEAD` and fingerprint. A plain `git diff` hash omits untracked
+file contents and is insufficient on its own. Exclude `.harness/loops/.state/`
+from the fingerprint so recording execution state does not invalidate it.
+
+Without a reliable fingerprint, verification evidence cannot be reused on
+resume. Any edit invalidates affected verification evidence.
 
 ## Phases
 
@@ -83,8 +98,9 @@ hash. Any edit invalidates affected verification evidence.
 - Establish acceptance criteria and scope.
 - Capture repository and authorization state.
 
-Transition to `needs_human` when the request has materially different reasonable
-interpretations or requires unauthorized scope.
+Transition to `needs_human` when conflicting requirements prevent a safe next
+step or an indispensable scope expansion is not authorized. Continue independent
+work while a decision is pending.
 
 ### 1. Select Work
 
@@ -166,7 +182,7 @@ Blocking findings transition to `repair`. No blocking findings transition to
 | Failure class | Transition |
 |---|---|
 | `implementation` | `repair` while budget remains |
-| `test_defect` | `needs_human` unless the agreed specification clearly resolves it |
+| `test_defect` | repair if the authorized behavior clearly resolves it; otherwise `needs_human` |
 | `environment` | safe alternative, otherwise `blocked` |
 | `scope_conflict` | `needs_human` |
 | `spec_ambiguity` | `needs_human` |
@@ -185,16 +201,22 @@ Reaching a budget ends in `budget_exhausted`; it does not redefine success.
 
 ## Human Gates
 
-Stop before:
+Use authorization already given in the conversation. Stop only when the next
+action needs a decision or authorization that has not been given, such as:
 
-- changing an agreed public API or user-visible contract;
-- expanding into a materially different module;
-- choosing between conflicting product behaviors;
+- changing an agreed public API or user-visible contract beyond the requested scope;
+- expanding into a materially different module beyond the requested scope;
+- choosing between conflicting product behaviors not resolved by the request;
 - weakening a security, privacy, gateway access, or financial-analysis boundary;
-- deleting or rewriting a test whose expected behavior is not resolved by the task;
-- using live credentials for otherwise unverifiable behavior;
-- destructive data or filesystem operations;
+- weakening valid test assertions or bypassing verification without explicit authorization;
+- deleting or rewriting a test whose expected behavior is unresolved;
+- using live credentials outside the authorized verification scope;
+- destructive data or filesystem operations outside the authorized scope;
 - commit, push, tag, release, publish, or deployment without authorization.
+
+Adding regression tests and updating tests to match already authorized behavior
+are normal implementation work and do not require separate approval. Never
+weaken or bypass valid verification merely to obtain a pass.
 
 ## Completion Evidence
 
@@ -212,6 +234,14 @@ will help a future agent avoid repeating meaningful work.
 
 ## Resume Policy
 
-On resume, load the state, compare it with the current repository, and
-invalidate verification evidence that does not match the current source state.
-Continue from the earliest phase with stale or missing evidence.
+On resume, load the state and recompute its content fingerprint using the
+recorded scope and generation method. Reuse a verification entry only when its
+recorded `HEAD` and fingerprint match the current repository and its fingerprint
+scope covers the inputs used by that check. Matching `HEAD` and `dirty` alone
+is never sufficient.
+
+If the fingerprint is absent, incomplete, mismatched, or cannot be recomputed,
+invalidate the affected verification entries and reopen acceptance criteria
+that relied on them. If the affected scope cannot be established, invalidate
+all prior test, type-check, and review evidence. Continue from the earliest
+phase with stale or missing evidence and rerun those checks before completion.

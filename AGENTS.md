@@ -1,147 +1,35 @@
 # Repository Guidelines
 
-- Repo: https://github.com/Flying-Henanese/eugene-krab
-- Upstream project: https://github.com/virattt/dexter
-- Eugene Krab is a fork of Dexter, a CLI-based AI agent for deep financial research built with TypeScript, Ink (React for CLI), and LangChain. This fork adds chat gateways, persistent workflows, and China A-share research capabilities.
-- For nontrivial repo work, read `.harness/README.md` after this file and follow its task routing to the smallest relevant context/checklist files. Treat `AGENTS.md` as the root map and `.harness/` as the repo-local operating manual.
-- Before implementing Feishu support, read `docs/superpowers/specs/2026-07-01-feishu-wsclient-design.md`. It captures the agreed scope: Feishu WSClient long connection, one-on-one text chats only, credentials in `.env`, no project-local allowlist for the first version.
-- Before implementing A-share analysis with Tushare and Tavily, read `docs/superpowers/specs/2026-07-02-tushare-tavily-stock-analysis-design.md`. It captures the initial source split: Tushare for A-share structured data, Tavily/web_search for current Chinese market context, and Financial Datasets retained for US/global equities. For the current single-stock workflow, neutral technical-assessment boundary, deterministic calculations, and subagent policy, use `.harness/context/market-data-sources.md` and `.harness/context/tools-skills-and-subagents.md` as the working source of truth.
+Eugene Krab is a Bun/TypeScript financial-research agent with CLI, chat-gateway,
+and China A-share capabilities. The upstream project is
+https://github.com/virattt/dexter.
 
-## Harness Context Routing
+## Start Here
 
-- Project orientation or architecture questions: read `.harness/context/project-overview.md` and `.harness/context/architecture-map.md`.
-- Runtime, env, model, or gateway startup work: read `.harness/context/runtime-and-config.md`.
-- Tool, skill, or subagent work: read `.harness/context/tools-skills-and-subagents.md`.
-- Feishu, WhatsApp, or gateway channel work: read `.harness/context/gateway-and-channels.md`.
-- Financial data source or A-share work: read `.harness/context/market-data-sources.md`.
-- Security-sensitive changes: read `.harness/checklists/security.md`.
-- Before editing code, use `.harness/checklists/code-change.md`; before claiming completion, use `.harness/checklists/verification.md`.
+- For nontrivial repository work, read `.harness/README.md` and follow its task
+  routing. Read only the context, workflow, standard, or checklist needed for the
+  current task.
+- Inspect the relevant source and tests before treating harness notes as a
+  description of current behavior. Historical design specs explain earlier
+  decisions; `.harness/README.md` routes to the current working context.
+- Check `git status --short` before editing and preserve unrelated user changes.
 
-## Project Structure
+## Global Rules
 
-- Source code: `src/`
-  - Agent core: `src/agent/` (agent loop, prompts, scratchpad, token counting, types)
-  - CLI interface: `src/cli.ts` (Ink/React), entry point: `src/index.tsx`
-  - Components: `src/components/` (Ink UI components)
-  - Controllers: `src/controllers/` (agent runner, model/search selection, input history)
-  - Gateway: `src/gateway/` (headless chat gateway, channels, routing, sessions, heartbeat)
-  - Gateway channels: `src/gateway/channels/` (WhatsApp and Feishu plugins)
-  - Model/LLM: `src/model/llm.ts` (multi-provider LLM abstraction)
-  - Provider metadata: `src/providers.ts` (provider IDs, model prefixes, fast models, context windows)
-  - Tools: `src/tools/` (finance, search, browser, fetch, filesystem, subagent, memory, cron, heartbeat, skill)
-  - Finance tools: `src/tools/finance/` (financials, market data, filings, screeners, deterministic financial arithmetic, Tushare A-share analysis, market sentiment, and technical analysis)
-  - A-share technical internals: `src/tools/finance/technical-analysis/` (data collection, indicators, raw research events, neutral public assessment, and offline applicability research)
-  - Search tools: `src/tools/search/` (Exa, Perplexity, Tavily, LangSearch, X search)
-  - Browser/fetch: `src/tools/browser/`, `src/tools/fetch/` (Playwright browser and URL fetch/summarization)
-  - Skills: `src/skills/` (SKILL.md-based extensible workflows, e.g. DCF, X research, memo writing)
-  - Persistent memory: `src/memory/` and `src/tools/memory/`
-  - Cron: `src/cron/` and `src/tools/cron/`
-  - Utils: `src/utils/` (env, config, paths, caching, token estimation, tool-result storage)
-  - Evals: `src/evals/` (LangSmith evaluation runner with Ink UI)
-- Config: `.dexter/settings.json` (persisted model/provider selection)
-- Gateway config: `.dexter/gateway.json` by default, or `DEXTER_GATEWAY_CONFIG`; on first default-path startup, root `gateway.example.json` seeds the local file without overwriting an existing config
-- Environment: `.env` (API keys; see `env.example`)
-- Scripts: `scripts/release.sh`
+- Use Bun for project commands. The essential checks are `bun run typecheck`
+  and `bun test`; select focused checks through
+  `.harness/checklists/verification.md`.
+- Use TypeScript ESM and strict typing. Follow `.harness/standards/coding.md`
+  for module-specific conventions. Do not add logging unless asked or needed by
+  an existing diagnostic path.
+- Never commit or expose `.env`, real credentials, or private `.dexter/` runtime
+  state. Use `.harness/checklists/security.md` for sensitive changes.
+- Update relevant harness context when behavior changes; avoid unrelated
+  documentation. Consult `.harness/checklists/code-change.md` before editing
+  and `.harness/checklists/verification.md` before claiming completion.
+- Do not commit, push, tag, release, publish, or deploy without user authorization.
+  Authorization already given for the action in the conversation remains valid.
 
-## Build, Test, and Development Commands
-
-- Runtime: Bun (primary). Use `bun` for all commands.
-- Install deps: `bun install`
-- Run: `bun run start` or `bun run src/index.tsx`
-- Dev (watch mode): `bun run dev`
-- Gateway: `bun run gateway`
-- WhatsApp login/setup: `bun run gateway:login`
-- Type-check: `bun run typecheck`
-- Tests: `bun test`
-- Evals: `bun run src/evals/run.ts` (full) or `bun run src/evals/run.ts --sample 10` (sampled)
-- CI runs `bun run typecheck` and `bun test` on push/PR.
-
-## Coding Style & Conventions
-
-- Language: TypeScript (ESM, strict mode). JSX via React (Ink for CLI rendering).
-- Prefer strict typing; avoid `any`.
-- Keep files concise; extract helpers rather than duplicating code.
-- Add brief comments for tricky or non-obvious logic.
-- Do not add logging unless explicitly asked.
-- Do not create README or documentation files unless explicitly asked.
-
-## LLM Providers
-
-- Supported: OpenAI (default), Anthropic, Google, xAI (Grok), Moonshot, DeepSeek, GLM (Zhipu AI), OpenRouter, Ollama (local), and Ollama Cloud.
-- Default model: `gpt-5.5`. Provider detection is prefix-based (`claude-` -> Anthropic, `gemini-` -> Google, etc.).
-- Fast models and provider metadata live in `src/providers.ts`.
-- Anthropic uses explicit `cache_control` on system prompt for prompt caching cost savings.
-- Users switch providers/models via `/model` command in the CLI.
-- Gateway/headless runs can use `DEXTER_AGENT_MODEL` and `DEXTER_AGENT_MODEL_PROVIDER`.
-- Subagents can use `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, and provider-specific DeepSeek or GLM reasoning-effort env vars.
-
-## Tools
-
-- `get_financials`: financial statements and metrics.
-- `get_market_data`: prices, company news, crypto data, and insider trades.
-- `read_filings`: SEC filing reader for 10-K, 10-Q, 8-K documents.
-- `stock_screener`: screen stocks by financial criteria.
-- `spawn_subagent`: delegate focused isolated subtasks to subagents.
-- `ask_user_question`: CLI-only multiple-choice user questions.
-- `web_fetch`: fetch and summarize URL content.
-- `web_search`: general web search over configured providers (Exa, Perplexity, Tavily, LangSearch).
-- `browser`: Playwright-based web scraping for reading pages the agent discovers.
-- `read_file`, `write_file`, `edit_file`: sandbox-aware local file tools; write/edit require approval.
-- `heartbeat`, `cron`: periodic checklist and scheduled job tools.
-- `memory_search`, `memory_get`, `memory_update`: persistent memory tools.
-- `financial_calculator`: always-available deterministic CNY unit conversion (yuan, ten-thousand yuan, and 100-million yuan), numeric comparison, and percentage-change arithmetic; it does not fetch data or make valuation judgments.
-- `a_share_analysis`: Tushare-backed China A-share structured analysis, enabled by `TUSHARE_TOKEN`; returns multi-period statements plus business composition, audit, dividends, forecasts, and express reports while preserving partial endpoint failures.
-- `market_sentiment_analysis`: Tushare-backed China A-share broad market sentiment analysis, enabled by `TUSHARE_TOKEN`.
-- `technical_analysis`: deterministic daily/weekly technical-state analysis for one China A-share or supported China index, enabled by `TUSHARE_TOKEN`; the registered tool exposes a neutral public assessment and hides raw action/position research fields.
-- `x_search`: X/Twitter search, enabled by `X_BEARER_TOKEN`.
-- `skill`: invokes SKILL.md-defined workflows (e.g. DCF valuation). Each skill runs at most once per query.
-- Tool registry: `src/tools/registry.ts`. Tools are conditionally included based on env vars.
-
-## Skills
-
-- Skills live as `SKILL.md` files with YAML frontmatter (`name`, `description`) and markdown body (instructions).
-- Built-in skills include DCF, Dexter help, X research, memo writing, the China A-share/index `technical-analysis` workflow, and the broad single-A-share `stock-analysis` workflow under `src/skills/`.
-- Discovery: `src/skills/registry.ts` scans for SKILL.md files at startup.
-- Skills are exposed to the LLM as metadata in the system prompt; the LLM invokes them via the `skill` tool.
-- Routing is model-driven rather than a hard-coded gateway keyword branch: narrow requests use the matching tool or skill, while an unspecified broad single-A-share request should use `stock-analysis` in the main agent. Keep ordinary one-company synthesis in the main agent; use `analysis` subagents for independent company lanes in comparisons or unusually dense multi-year statement work, and the `technical-analysis` subagent only as an isolated technical lane of a broader report.
-- `technical_analysis` has separate internal and public contracts: raw Baseline V0/Trend Recovery V1 events remain available for tests and research, while conversational surfaces receive neutral state, observation, structural-change, evidence-quality, limitation, and decision-context fields. Applicability V2.1 remains offline and unvalidated.
-
-## Agent Architecture
-
-- Agent loop: `src/agent/agent.ts`. Iterative tool-calling loop with configurable max iterations (default 10).
-- Scratchpad: `src/agent/scratchpad.ts`. Single source of truth for all tool results within a query.
-- Context management: Anthropic-style. Full tool results kept in context; oldest results cleared when token threshold exceeded.
-- Final answer: the first model response without tool calls becomes the final answer. Tool results remain in the message history, subject to result budgeting and context compaction. Research workers additionally reserve a tool-free final iteration.
-- Events: agent yields typed events (`stream_progress`, `thinking`, `tool_start`, `tool_end`, `tool_error`, `done`, etc.) for real-time UI updates.
-
-## Environment Variables
-
-- LLM keys: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `XAI_API_KEY`, `OPENROUTER_API_KEY`
-- Additional providers: `MOONSHOT_API_KEY`, `DEEPSEEK_API_KEY`, `GLM_API_KEY`, `OLLAMA_CLOUD_API_KEY`
-- Ollama: `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`)
-- Gateway/headless models: `DEXTER_AGENT_MODEL`, `DEXTER_AGENT_MODEL_PROVIDER`
-- Subagents: `SUBAGENT_MODEL`, `SUBAGENT_ANALYSIS_MODEL`, `DEEPSEEK_REASONING_EFFORT`, `DEEPSEEK_SUBAGENT_REASONING_EFFORT`, `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT`, `GLM_REASONING_EFFORT`, `GLM_SUBAGENT_REASONING_EFFORT`, `GLM_ANALYSIS_SUBAGENT_REASONING_EFFORT`
-- Finance: `FINANCIAL_DATASETS_API_KEY`, `TUSHARE_TOKEN`
-- Search: `EXASEARCH_API_KEY`, `PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `LANGSEARCH_API_KEY`, `X_BEARER_TOKEN`
-- Feishu: `FEISHU_APP_ID`, `FEISHU_APP_SECRET`
-- Tracing: `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT`, `LANGSMITH_PROJECT`, `LANGSMITH_TRACING`
-- Never commit `.env` files or real API keys.
-
-## Version & Release
-
-- Version format: SemVer `MAJOR.MINOR.PATCH`. Tag prefix: `v`.
-- Release script: `bash scripts/release.sh [version]` (defaults to today's date).
-- Release flow: bump version in `package.json`, create git tag, push tag, create GitHub release via `gh`.
-- Do not push or publish without user confirmation.
-
-## Testing
-
-- Framework: Bun's built-in test runner (primary), Jest config exists for legacy compatibility.
-- Tests colocated as `*.test.ts`.
-- Run `bun test` before pushing when you touch logic.
-
-## Security
-
-- API keys stored in `.env` (gitignored). Users can also enter keys interactively via the CLI.
-- Local model and gateway config is stored in `.dexter/settings.json` and `.dexter/gateway.json` (gitignored). If settings are absent, the CLI uses `openai` / `gpt-5.5`; gateway model environment variables take precedence over the settings fallback. A missing default-path gateway config is initialized once from the committed root `gateway.example.json`.
-- Never commit or expose real API keys, tokens, or credentials.
+The detailed project map, commands, provider and tool policies, domain-specific
+boundaries, and release procedure live in `.harness/` so they are loaded only
+when relevant.

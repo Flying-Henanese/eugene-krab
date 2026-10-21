@@ -1,6 +1,8 @@
 # Coding Standards
 
-Use this as the local TypeScript/Bun coding standard. Keep `AGENTS.md` authoritative for repo-wide rules and use `testing.md` for test-specific depth.
+Use this as the local TypeScript/Bun coding standard. Keep `AGENTS.md`
+authoritative for repo-wide rules and use
+`.harness/checklists/verification.md` for testing and final review checks.
 
 ## TypeScript And Runtime
 

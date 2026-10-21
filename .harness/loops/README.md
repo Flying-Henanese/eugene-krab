@@ -7,8 +7,11 @@ stops in a named terminal state.
 
 ## Start Here
 
-- Use `verified-code-change.md` for an ordinary feature, bug fix, or refactor.
-- Copy `TEMPLATE.md` when defining a new loop.
+- Use `verified-code-change.md` when a feature, bug fix, or refactor needs
+  multiple verification and repair cycles, spans sessions, or has unusual risk.
+  Small bounded changes use the code-change and verification checklists directly.
+- For a new loop, follow the contract below and use
+  `verified-code-change.md` as a working example.
 - Validate persistent execution state against `state.schema.json`.
 - Store active, uncommitted state under `.harness/loops/.state/`. That directory
   is gitignored.
@@ -61,7 +64,10 @@ type-check, or review evidence.
 - Preserve unrelated user changes.
 - Never weaken acceptance criteria or valid tests merely to obtain a pass.
 - Prefer compiler, test, schema, and runtime evidence over model self-review.
-- Keep the actor from changing its own verifier without an explicit human gate.
+- Adding regression tests and updating tests to match already authorized
+  behavior do not require separate approval. Weakening valid assertions or
+  bypassing checks requires explicit authorization; changing unresolved expected
+  behavior requires a user decision. Never do either merely to obtain a pass.
 - Do not commit, push, tag, release, publish, or deploy unless explicitly authorized.
 - Persist decisions and verification evidence, not private chain-of-thought.
 
@@ -74,5 +80,6 @@ Use one JSON file per active execution:
 ```
 
 The state is operational and should not be committed. After a meaningful run,
-distill durable results into the appropriate `context/`, `troubleshooting/`,
-`decisions/`, or `runs/` file.
+distill durable results into the appropriate `context/`, `troubleshooting/`, or
+`runs/` file. Record new design decisions under `docs/superpowers/specs/` and
+link still-current boundaries from `context/`.

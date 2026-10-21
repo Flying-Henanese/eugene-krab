@@ -4,7 +4,7 @@ Read this when changing module boundaries, tracing request flow, or deciding whe
 
 ## Top-Level Runtime Boundaries
 
-- CLI UI: Ink/React components under `src/components/`, command handling under `src/commands/`, and controllers under `src/controllers/`.
+- CLI UI: `src/cli.ts` builds the `@mariozechner/pi-tui` interface from components under `src/components/`, command handling under `src/commands/`, and controllers under `src/controllers/`.
 - Agent runtime: `src/agent/` owns system prompt assembly, iterative model/tool loop, scratchpad, compaction, microcompaction, and event emission.
 - Model layer: `src/model/llm.ts` creates LangChain chat models for OpenAI, Anthropic, Google, xAI, Moonshot, DeepSeek, GLM, OpenRouter, Ollama, and Ollama Cloud providers.
 - Tools: `src/tools/registry.ts` is the central registration point. Tool implementations live in subdirectories by capability.
@@ -18,7 +18,7 @@ Read this when changing module boundaries, tracing request flow, or deciding whe
 
 ## Agent Loop
 
-`Agent.create()` builds a model-specific tool set, filters CLI-only tools for non-CLI channels, loads prompt context, and returns an `Agent`. `Agent.run()` then:
+`Agent.create()` builds a model-specific tool set, filters CLI-only tools for non-CLI channels, loads prompt context, and returns an `Agent` (normally with a 10-iteration limit). `Agent.run()` then:
 
 1. Builds the message array from system prompt, recent chat history, and user query.
 2. Calls the model with streaming where possible.
@@ -26,6 +26,10 @@ Read this when changing module boundaries, tracing request flow, or deciding whe
 4. Persists or trims oversized tool results.
 5. Compacts context when thresholds require it.
 6. Emits typed events for the CLI/gateway UI and final answer handling.
+
+`src/agent/scratchpad.ts` retains tool results for the query, subject to result
+budgeting and context compaction. The first model response without tool calls
+becomes the final answer; research workers reserve a tool-free final iteration.
 
 ## Gateway Flow
 

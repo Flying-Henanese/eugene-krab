@@ -35,7 +35,12 @@ Main-agent tool choice is model-driven after the tool set is bound. Compact regi
 
 ## Skills
 
-Skills are SKILL.md directories under `src/skills/`. They are discovered at startup and exposed through the `skill` tool. Built-ins currently include DCF, help, X research, memo writing, the China A-share/index `technical-analysis` workflow, and the single-A-share `stock-analysis` workflow.
+Skills are SKILL.md directories under `src/skills/`, with YAML frontmatter
+(`name`, `description`) and a Markdown workflow body. They are discovered at
+startup by `src/skills/registry.ts` and exposed through the `skill` tool.
+Built-ins currently include DCF, help, X research, memo writing, the China
+A-share/index `technical-analysis` workflow, and the single-A-share
+`stock-analysis` workflow.
 
 Use skills for reusable workflows. Do not hard-code skill-specific behavior into the general agent loop unless the behavior is truly global.
 

@@ -21,7 +21,7 @@ Eugene Krab is a fork of Dexter, a Bun/TypeScript CLI agent for financial resear
 
 The project supports two main usage modes:
 
-- Interactive financial research through the Ink CLI.
+- Interactive financial research through the `@mariozechner/pi-tui` CLI in `src/cli.ts`.
 - Headless chat operation through the gateway, currently with WhatsApp and Feishu channel plugins.
 
 The agent can call finance tools, web/search/browser tools, filesystem tools, memory tools, cron/heartbeat tools, built-in skills, and isolated subagents. Gateway channels should not assume CLI-only tools such as interactive question prompts are available.

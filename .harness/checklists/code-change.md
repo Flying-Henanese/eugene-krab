@@ -8,6 +8,9 @@ Use this before and during nontrivial edits.
 - Read `.harness/README.md` and the task-specific context file.
 - Inspect current source paths before trusting README or prior notes.
 - Check `git status --short` so unrelated user changes are visible.
+- For multi-step, resumable, or unusually risky code changes, use
+  `.harness/loops/verified-code-change.md`; small bounded edits use this
+  checklist and `verification.md` without persistent loop state.
 - If touching Feishu or gateway channels, read `.harness/context/gateway-and-channels.md`; consult `docs/superpowers/specs/2026-07-01-feishu-wsclient-design.md` only for original rationale or scope questions.
 - If touching A-share/Tushare/Tavily behavior, read `.harness/context/market-data-sources.md`; consult `docs/superpowers/specs/2026-07-02-tushare-tavily-stock-analysis-design.md` only for original rationale or scope questions.
 

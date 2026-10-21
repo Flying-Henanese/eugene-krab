@@ -49,3 +49,33 @@ The gateway config file is gitignored local state. `loadGatewayConfig()` seeds i
 ## Local State
 
 The `.dexter/` directory stores settings, gateway config, memory, scratchpads, sessions, credentials, and tool results. It is gitignored local runtime state and must not be committed.
+
+## ECS Workbench Deployment
+
+The authorized deployment target for this project is an Alibaba Cloud ECS instance accessed through the locally configured Workbench CLI. Workbench credentials stay on the operator's machine in the CLI credential profile; never add AccessKey values, STS tokens, SSH keys, `.env` contents, or `~/.workbench/config.json` to this repository.
+
+- Instance ID: `i-uf6isgy1aeg3ut4txhzc`
+- Region: `cn-shanghai`
+- Project directory on ECS: `/home/eugene-krab`
+
+Use `workbench exec` with the instance ID and region above for remote checks and deployment operations. The standard read-only health check is:
+
+```bash
+workbench exec \
+  --instance-id i-uf6isgy1aeg3ut4txhzc \
+  --region cn-shanghai \
+  --command 'cd /home/eugene-krab && git status --short && docker compose ps --all' \
+  --output json
+```
+
+For an explicitly requested deployment, fast-forward the ECS checkout and recreate the gateway service with the committed Compose configuration:
+
+```bash
+workbench exec \
+  --instance-id i-uf6isgy1aeg3ut4txhzc \
+  --region cn-shanghai \
+  --command 'cd /home/eugene-krab && git pull --ff-only origin main && docker compose up -d --no-build --force-recreate dexter-gateway' \
+  --output json
+```
+
+Before reporting success, verify the remote commit, container state, and recent gateway logs. Preserve the host-mounted `.dexter` runtime state; it contains local gateway configuration and must not be replaced by repository files.
