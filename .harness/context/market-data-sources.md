@@ -12,6 +12,22 @@ Read this before changing financial research tools, A-share support, search-prov
 - Current market context and news: `web_search`, using Exa, Perplexity, Tavily, or LangSearch based on configured API keys and preference.
 - X/Twitter sentiment: `x_search`, enabled only when `X_BEARER_TOKEN` is set.
 
+Financial Datasets `get_market_data` routes insider transactions (Form 4),
+insider holdings (Forms 3/5), institutional holdings (13F), and beneficial
+ownership/activist stakes (13D/13G) separately. The implementation lives in
+`src/tools/finance/get-market-data.ts`, `insider_trades.ts`,
+`insider_ownership.ts`, and `beneficial_ownership.ts`. Common insider names
+are resolved against SEC names before querying transactions, with an LLM
+fallback when deterministic matching finds no candidate. Beneficial-owner
+queries accept exactly one of ticker, filer name, or CIK.
+
+`src/tools/finance/api.ts` follows cursor pagination before caching results,
+merges list arrays (including nested financial statements), and rejects
+cross-origin pagination URLs and repeated page URLs. Financial Datasets
+sub-tools have a 60-second aggregation timeout in `src/tools/finance/utils.ts`.
+Current price snapshots expose latest price and daily change; use historical
+prices for OHLCV. These provider-specific changes do not alter Tushare tools.
+
 Scheduled A-share source policies:
 
 - `tushare_only` requires `TUSHARE_TOKEN`, binds `a_share_analysis`,
