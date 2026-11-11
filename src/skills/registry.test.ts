@@ -42,10 +42,13 @@ describe('skill registry', () => {
     clearSkillCache();
     const metadata = discoverSkills().find((skill) => skill.name === 'stock-analysis');
 
+    expect(metadata?.description).toContain('MUST be invoked as the first action');
+    expect(metadata?.description).toContain('综合分析某只股票');
+    expect(metadata?.description).toContain('before calling underlying finance, search, or technical tools');
     expect(metadata?.description).toContain('分析一下某只股票');
     expect(metadata?.description).toContain('深入分析某公司');
     expect(metadata?.description).toContain('这只股票最近怎么样');
-    expect(metadata?.description).toContain('Do not use when the request is explicitly technical-analysis only');
+    expect(metadata?.description).toContain('Do not use when the request is explicitly limited to technical analysis only');
     expect(metadata?.description).toContain('multi-company comparison');
     expect(metadata?.description).toContain('investment memo');
 

@@ -3,8 +3,9 @@ import { theme } from '../../theme.js';
 
 export interface EvalResult {
   question: string;
-  score: number;
+  score: number | null;
   comment: string;
+  behaviorPass: boolean;
 }
 
 function truncateAtWord(str: string, maxLength: number): string {
@@ -29,9 +30,14 @@ export class EvalRecentResults extends Container {
     const recentResults = results.slice(-maxDisplay);
 
     for (const result of recentResults) {
-      const isCorrect = result.score === 1;
-      const icon = isCorrect ? '✓' : '✗';
-      const color = isCorrect ? theme.success : theme.error;
+      const isPending = result.score === null;
+      const isCorrect = result.score === 1 && result.behaviorPass;
+      const icon = isPending && result.behaviorPass ? '○' : isCorrect ? '✓' : '✗';
+      const color = isPending && result.behaviorPass
+        ? theme.primary
+        : isCorrect
+          ? theme.success
+          : theme.error;
       this.addChild(new Text(`${color(icon)} ${truncateAtWord(result.question, 60)}`, 0, 0));
     }
   }

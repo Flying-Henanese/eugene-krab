@@ -1,6 +1,6 @@
 ---
 name: stock-analysis
-description: Produces a source-disciplined, neutral combined analysis of one China A-share using structured fundamentals and valuation, recent company or industry information, and deterministic technical state. Use for broad single-stock requests such as “分析一下某只股票”, “深入分析某公司”, “这只股票最近怎么样”, “有哪些风险”, or “有什么值得注意的变化” when the user has not limited the request to one research lane. Do not use when the request is explicitly technical-analysis only, fundamentals or valuation only, news only, broad-market sentiment, a multi-company comparison, a DCF, or an investment memo.
+description: MUST be invoked as the first action for a broad combined analysis of one China A-share when the request covers two or more research lanes such as fundamentals or valuation, recent company or industry information, risks, and technical state. This includes requests such as “综合分析某只股票”, “分析一下某只股票”, “深入分析某公司”, “这只股票最近怎么样”, “有哪些风险”, or “有什么值得注意的变化”. Load this skill before calling underlying finance, search, or technical tools. Do not use when the request is explicitly limited to technical analysis only, fundamentals or valuation only, news only, broad-market sentiment, a multi-company comparison, a DCF, or an investment memo.
 ---
 
 # China A-Share Combined Analysis

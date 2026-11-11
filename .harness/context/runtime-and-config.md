@@ -36,7 +36,23 @@ Interactive CLI model selection is stored in `.dexter/settings.json`. Gateway/he
 
 The settings file is optional local state. When it is absent or unreadable, the CLI falls back to the built-in `openai` provider and `gpt-5.5` model. Gateway model resolution prefers explicit arguments, gateway JSON, and `DEXTER_AGENT_MODEL` / `DEXTER_AGENT_MODEL_PROVIDER` before falling back to settings and then the same built-in defaults. The runtime does not need to generate a settings file merely to start.
 
-DeepSeek V4 thinking mode is handled in `src/model/llm.ts` for `deepseek-v4-pro` and `deepseek-v4-flash`. GLM 5.3 Flash routes to the Zhipu AI OpenAI-compatible endpoint and retains `reasoning_content` across tool-call turns.
+DeepSeek thinking mode is handled in `src/model/llm.ts` for `deepseek-v4-pro`,
+`deepseek-flash`, and the older `deepseek-v4-flash` ID. Provider-specific
+`thinking` and `reasoning_effort` fields are sent through LangChain's
+`modelKwargs`; explicit effort takes precedence over the environment value.
+GLM 5.3 Flash routes to the Zhipu AI OpenAI-compatible endpoint and retains
+`reasoning_content` across tool-call turns.
+
+This fork prioritizes mainland Chinese models for upstream model updates.
+`src/utils/model.ts` includes Kimi K3 and DeepSeek V4.1 Flash alongside older
+model choices and local GLM support. The Moonshot endpoint remains
+`https://api.moonshot.cn/v1`. Provider fast-model defaults in `src/providers.ts`
+are `kimi-k3`, `deepseek-flash`, and `glm-5.3-flash`; explicit subagent model
+overrides still take precedence. Saved model IDs are not automatically migrated
+to these newer models. Moonshot keeps its conservative provider-wide context
+window because the registry still supports older Kimi models. GPT, Anthropic,
+Google and xAI updates from this upstream batch are intentionally excluded,
+along with the Anthropic/LangChain dependency bumps.
 
 `SUBAGENT_ANALYSIS_MODEL` overrides only `analysis` workers. For DeepSeek, `DEEPSEEK_ANALYSIS_SUBAGENT_REASONING_EFFORT` overrides reasoning effort only for those workers, then falls back to `DEEPSEEK_SUBAGENT_REASONING_EFFORT` and the normal main-model setting. Other subagent types continue to use the general subagent reasoning policy.
 
@@ -49,6 +65,14 @@ The gateway config file is gitignored local state. `loadGatewayConfig()` seeds i
 ## Local State
 
 The `.dexter/` directory stores settings, gateway config, memory, scratchpads, sessions, credentials, and tool results. It is gitignored local runtime state and must not be committed.
+
+Bash permissions live in the optional `permissions` section of
+`.dexter/settings.json`, handled by `src/permissions/rules.ts`. The `allow`,
+`ask`, and `deny` arrays contain rules such as `Bash(git status)` (exact command),
+`Bash(git status:*)` (word prefix), or `Bash` (tool-wide). The optional
+`defaultBashDecision` accepts `allow`, `ask`, or `deny` and defaults to `ask`.
+The CLI's permanent approval option adds an allow rule without replacing other
+settings. This adds no environment variables or gateway configuration fields.
 
 ## ECS Workbench Deployment
 

@@ -137,6 +137,7 @@ describe('collectAShareAnalysis', () => {
     const result = await collectAShareAnalysis('长电科技', client);
 
     expect(requestedParams.get('income')?.limit).toBe(12);
+    expect(requestedParams.get('income')?.period).toBeUndefined();
     expect(requestedFields.get('income')).toContain('n_income_attr_p');
     expect(requestedFields.get('income')).not.toContain('n_cashflow_act');
     expect(requestedFields.get('cashflow')).toContain('n_cashflow_act');
@@ -150,6 +151,109 @@ describe('collectAShareAnalysis', () => {
       expect(result.financials.cashflow[0]?.free_cashflow).toBe(-497_284_933.2179);
       expect(result.financials.cashflow[0]?.operating_cashflow_less_capex).toBe(-1_646_087_059.13);
       expect(result.source_units.derived_cashflow_fields.operating_cashflow_less_capex).toContain('n_cashflow_act');
+    }
+  });
+
+  test('normalizes and strictly applies an exact financial report period', async () => {
+    const requestedParams = new Map<string, Record<string, unknown>>();
+    const client = {
+      call: async (apiName: string, params: Record<string, unknown>) => {
+        requestedParams.set(apiName, params);
+        if (apiName === 'stock_basic') {
+          return [{ ts_code: '600519.SH', symbol: '600519', name: '贵州茅台' }];
+        }
+        if (apiName === 'income') {
+          return [
+            {
+              ts_code: '600519.SH',
+              end_date: '20241231',
+              report_type: '1',
+              comp_type: '1',
+              revenue: 170_899_152_276.34,
+              n_income_attr_p: 86_228_146_421.62,
+              update_flag: '1',
+            },
+            {
+              ts_code: '600519.SH',
+              end_date: '20231231',
+              report_type: '1',
+              comp_type: '1',
+              revenue: 147_693_604_994.14,
+              n_income_attr_p: 74_734_071_500,
+              update_flag: '0',
+            },
+            {
+              ts_code: '600519.SH',
+              end_date: '20231231',
+              report_type: '1',
+              comp_type: '1',
+              revenue: 147_693_604_994.14,
+              n_income_attr_p: 74_734_071_550.75,
+              update_flag: '1',
+            },
+          ];
+        }
+        if (['balancesheet', 'cashflow', 'fina_indicator'].includes(apiName)) {
+          return [
+            { ts_code: '600519.SH', end_date: '20241231', update_flag: '1' },
+            { ts_code: '600519.SH', end_date: '20231231', update_flag: '1' },
+          ];
+        }
+        return [];
+      },
+    } as unknown as TushareClient;
+
+    const result = await collectAShareAnalysis('贵州茅台 2023 年报', client, '2023-12-31');
+
+    for (const apiName of ['income', 'balancesheet', 'cashflow', 'fina_indicator']) {
+      expect(requestedParams.get(apiName)?.period).toBe('20231231');
+    }
+    expect(requestedParams.get('fina_mainbz')?.period).toBeUndefined();
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.query_scope).toEqual({
+        mode: 'exact_period',
+        requested_period: '20231231',
+      });
+      expect(result.financials.income).toHaveLength(1);
+      expect(result.financials.income[0]?.end_date).toBe('20231231');
+      expect(result.financials.income[0]?.update_flag).toBe('1');
+      expect(result.financials.income[0]?.revenue).toBe(147_693_604_994.14);
+      expect(result.financials.income[0]?.n_income_attr_p).toBe(74_734_071_550.75);
+      for (const rows of Object.values(result.financials)) {
+        expect(rows.every((row) => row.end_date === '20231231')).toBe(true);
+      }
+    }
+  });
+
+  test('does not fall back to newer statements when an exact period is unavailable', async () => {
+    const client = {
+      call: async (apiName: string) => {
+        if (apiName === 'stock_basic') {
+          return [{ ts_code: '600519.SH', symbol: '600519', name: '贵州茅台' }];
+        }
+        if (apiName === 'income') {
+          return [{
+            ts_code: '600519.SH',
+            end_date: '20241231',
+            revenue: 170_899_152_276.34,
+            update_flag: '1',
+          }];
+        }
+        return [];
+      },
+    } as unknown as TushareClient;
+
+    const result = await collectAShareAnalysis('贵州茅台历史年报', client, '20231231');
+
+    expect(result.status).toBe('ok');
+    if (result.status === 'ok') {
+      expect(result.query_scope).toEqual({
+        mode: 'exact_period',
+        requested_period: '20231231',
+      });
+      expect(result.financials.income).toEqual([]);
     }
   });
 

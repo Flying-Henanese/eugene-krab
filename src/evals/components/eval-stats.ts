@@ -16,6 +16,7 @@ export class EvalStats extends Container {
   private readonly statsText: Text;
   private correct = 0;
   private incorrect = 0;
+  private pending = 0;
   private startTime: number | null = null;
   private timer: NodeJS.Timeout | null = null;
 
@@ -26,9 +27,10 @@ export class EvalStats extends Container {
     this.addChild(this.statsText);
   }
 
-  setStats(correct: number, incorrect: number, startTime: number | null) {
+  setStats(correct: number, incorrect: number, startTime: number | null, pending = 0) {
     this.correct = correct;
     this.incorrect = incorrect;
+    this.pending = pending;
     this.startTime = startTime;
     this.refresh();
     if (startTime === null) {
@@ -47,7 +49,7 @@ export class EvalStats extends Container {
     this.statsText.setText(
       `${theme.success(`✓ ${this.correct} correct`)}  ${theme.error(
         `✗ ${this.incorrect} incorrect`,
-      )}  ${theme.muted(`⏱ ${elapsed}`)}`,
+      )}  ${theme.primary(`○ ${this.pending} pending`)}  ${theme.muted(`⏱ ${elapsed}`)}`,
     );
   }
 

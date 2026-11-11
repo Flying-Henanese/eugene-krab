@@ -19,6 +19,8 @@ Tushare-backed structured analysis tool for China mainland A-shares.
 
 The tool returns statement-specific fields for multiple comparison periods and prefers updated Tushare rows when duplicate report versions exist. Use its structured statements and supplemental evidence for ordinary financial analysis instead of requiring annual-report PDF parsing. Treat interim statement periods as cumulative reported-period values unless a returned field explicitly says otherwise, and compare like-for-like periods.
 
+For ordinary current analysis, omit period to keep the default latest comparison-period behavior. When the user explicitly requests a historical report period, or a workflow needs an exact historical comparison, pass period as YYYYMMDD or YYYY-MM-DD. An exact-period request is applied only to income, balancesheet, cashflow, and fina_indicator and never silently falls back to a newer period.
+
 The cashflow result keeps Tushare free_cashflow unchanged and separately calculates operating_cashflow_less_capex as n_cashflow_act minus c_pay_acq_const_fiolta. Do not use one label or explanation for the other.
 
 ## Pair With web_search
@@ -43,6 +45,9 @@ export type AShareAnalysisResult =
         forecasts: TushareRow[];
         express: TushareRow[];
       };
+      query_scope:
+        | { mode: 'latest_comparison_periods' }
+        | { mode: 'exact_period'; requested_period: string };
       unavailable_data: Array<{ api: string; reason: 'permission_denied' | 'error'; message: string }>;
       source: { provider: 'Tushare'; apis: string[] };
       source_units: {
@@ -64,6 +69,11 @@ export type AShareAnalysisResult =
 
 const A_SHARE_TOOL_SCHEMA = z.object({
   query: z.string().describe('The full natural-language A-share stock question'),
+  period: z
+    .string()
+    .regex(/^\d{8}$|^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .describe('Optional exact financial report period as YYYYMMDD or YYYY-MM-DD. Omit for ordinary latest-period analysis.'),
 });
 
 const DAILY_BASIC_FIELDS = [
@@ -219,8 +229,13 @@ const EXPRESS_FIELDS = [
   'update_flag',
 ];
 
-export async function collectAShareAnalysis(query: string, client: TushareClient): Promise<AShareAnalysisResult> {
+export async function collectAShareAnalysis(
+  query: string,
+  client: TushareClient,
+  period?: string,
+): Promise<AShareAnalysisResult> {
   const usedApis = ['stock_basic'];
+  const requestedPeriod = normalizeReportPeriod(period);
   let resolved: Awaited<ReturnType<typeof resolveAShareStock>>;
   try {
     resolved = await resolveAShareStock(query, client);
@@ -247,6 +262,11 @@ export async function collectAShareAnalysis(query: string, client: TushareClient
 
   const stock = resolved.stock;
   const unavailableData: Array<{ api: string; reason: 'permission_denied' | 'error'; message: string }> = [];
+  const statementParams = {
+    ts_code: stock.ts_code,
+    limit: 12,
+    ...(requestedPeriod ? { period: requestedPeriod } : {}),
+  };
 
   const dailyBasic = await callOptional(client, 'daily_basic', { ts_code: stock.ts_code }, DAILY_BASIC_FIELDS, unavailableData);
   usedApis.push('daily_basic');
@@ -263,10 +283,10 @@ export async function collectAShareAnalysis(query: string, client: TushareClient
     forecasts,
     express,
   ] = await Promise.all([
-    callOptional(client, 'income', { ts_code: stock.ts_code, limit: 12 }, INCOME_FIELDS, unavailableData),
-    callOptional(client, 'balancesheet', { ts_code: stock.ts_code, limit: 12 }, BALANCESHEET_FIELDS, unavailableData),
-    callOptional(client, 'cashflow', { ts_code: stock.ts_code, limit: 12 }, CASHFLOW_FIELDS, unavailableData),
-    callOptional(client, 'fina_indicator', { ts_code: stock.ts_code, limit: 12 }, FINA_INDICATOR_FIELDS, unavailableData),
+    callOptional(client, 'income', statementParams, INCOME_FIELDS, unavailableData),
+    callOptional(client, 'balancesheet', statementParams, BALANCESHEET_FIELDS, unavailableData),
+    callOptional(client, 'cashflow', statementParams, CASHFLOW_FIELDS, unavailableData),
+    callOptional(client, 'fina_indicator', statementParams, FINA_INDICATOR_FIELDS, unavailableData),
     callOptional(client, 'fina_mainbz', { ts_code: stock.ts_code, type: 'P', limit: 20 }, MAIN_BUSINESS_FIELDS, unavailableData),
     callOptional(client, 'fina_mainbz', { ts_code: stock.ts_code, type: 'D', limit: 20 }, MAIN_BUSINESS_FIELDS, unavailableData),
     callOptional(client, 'fina_audit', { ts_code: stock.ts_code, limit: 3 }, AUDIT_FIELDS, unavailableData),
@@ -291,10 +311,15 @@ export async function collectAShareAnalysis(query: string, client: TushareClient
     stock,
     market_snapshot: pickMarketSnapshot(dailyBasic),
     financials: {
-      income: pickLatestFinancialRows(income, INCOME_FIELDS),
-      balancesheet: pickLatestFinancialRows(balancesheet, BALANCESHEET_FIELDS),
-      cashflow: addDerivedCashflowFields(pickLatestFinancialRows(cashflow, CASHFLOW_FIELDS)),
-      fina_indicator: pickLatestFinancialRows(finaIndicator, FINA_INDICATOR_FIELDS),
+      income: pickLatestFinancialRows(filterByReportPeriod(income, requestedPeriod), INCOME_FIELDS),
+      balancesheet: pickLatestFinancialRows(filterByReportPeriod(balancesheet, requestedPeriod), BALANCESHEET_FIELDS),
+      cashflow: addDerivedCashflowFields(
+        pickLatestFinancialRows(filterByReportPeriod(cashflow, requestedPeriod), CASHFLOW_FIELDS),
+      ),
+      fina_indicator: pickLatestFinancialRows(
+        filterByReportPeriod(finaIndicator, requestedPeriod),
+        FINA_INDICATOR_FIELDS,
+      ),
     },
     supplemental: {
       main_business: {
@@ -306,6 +331,9 @@ export async function collectAShareAnalysis(query: string, client: TushareClient
       forecasts: pickRows(forecasts, FORECAST_FIELDS, 4),
       express: pickRows(express, EXPRESS_FIELDS, 4),
     },
+    query_scope: requestedPeriod
+      ? { mode: 'exact_period', requested_period: requestedPeriod }
+      : { mode: 'latest_comparison_periods' },
     unavailable_data: unavailableData,
     source: { provider: 'Tushare', apis: usedApis },
     source_units: {
@@ -327,6 +355,15 @@ export async function collectAShareAnalysis(query: string, client: TushareClient
       },
     },
   };
+}
+
+function normalizeReportPeriod(period?: string): string | undefined {
+  return period?.replaceAll('-', '');
+}
+
+function filterByReportPeriod(rows: TushareRow[], period?: string): TushareRow[] {
+  if (!period) return rows;
+  return rows.filter((row) => String(row.end_date ?? '') === period);
 }
 
 function addDerivedCashflowFields(rows: TushareRow[]): TushareRow[] {
@@ -351,7 +388,7 @@ export function createAShareAnalysis(token = process.env.TUSHARE_TOKEN): Dynamic
         throw new Error('TUSHARE_TOKEN is required for a_share_analysis');
       }
       const client = new HttpTushareClient(token);
-      return formatToolResult(await collectAShareAnalysis(input.query, client), []);
+      return formatToolResult(await collectAShareAnalysis(input.query, client, input.period), []);
     },
   });
 }

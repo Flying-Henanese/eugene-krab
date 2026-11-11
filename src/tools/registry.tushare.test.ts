@@ -112,5 +112,6 @@ describe('Tushare tool registration', () => {
     expect(names).not.toContain('web_search');
     expect(names).not.toContain('cron');
     expect(names).not.toContain('spawn_subagent');
+    expect(names).not.toContain('bash');
   });
 });

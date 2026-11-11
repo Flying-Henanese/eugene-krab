@@ -42,7 +42,7 @@ describe('resolveSubagentModel', () => {
     delete process.env.SUBAGENT_MODEL;
     delete process.env.SUBAGENT_ANALYSIS_MODEL;
 
-    expect(resolveSubagentModel('deepseek-v4-pro', 'research')).toBe('deepseek-v4-flash');
+    expect(resolveSubagentModel('deepseek-v4-pro', 'research')).toBe('deepseek-flash');
   });
 
   test('uses SUBAGENT_MODEL for all subagent types', () => {
@@ -227,6 +227,7 @@ describe('prompt-visible subagent routing boundaries', () => {
       const tools = resolveSubagentTools(type);
       expect(tools).not.toContain('spawn_subagent');
       expect(tools).not.toContain('ask_user_question');
+      expect(tools).not.toContain('bash');
     }
   });
 });

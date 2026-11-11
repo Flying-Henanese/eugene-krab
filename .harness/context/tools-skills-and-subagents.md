@@ -32,6 +32,33 @@ Main-agent tool choice is model-driven after the tool set is bound. Compact regi
 - `financial_calculator` is always available for deterministic CNY/万元/亿元 conversion, numeric comparison, and percentage-change arithmetic; it does not fetch data or make valuation judgments.
 - `x_search` appears only when `X_BEARER_TOKEN` is set.
 - `ask_user_question` is CLI-only. `Agent.create()` removes it for non-CLI channels.
+- `bash` is registered only on non-Windows platforms and is CLI-only.
+  `Agent.create()` removes it for non-CLI channels even when explicitly
+  allowlisted, and compact prompt descriptions use the final bound tool names.
+
+## Permissions And Shell Execution
+
+`src/permissions/engine.ts` decides allow/ask/deny before tool budget reservation
+in `src/agent/tool-executor.ts`. File writes and edits still ask and share the
+`file:write` session grant. Bash asks by default, including read-only commands;
+explicit permission rules can allow or deny it. Unsupported shell syntax always
+asks and cannot cache an approval. Parsed commands apply built-in sensitive-env
+and literal sensitive-path checks (including redirect targets), then deny rules,
+ask rules, allow rules, and the configured fallback decision.
+
+Bash session grants match the exact command and are cleared at the beginning of
+each CLI query by `src/controllers/agent-runner.ts`. File grants survive between
+queries. The approval prompt displays the complete command and offers a
+persistent rule only when the engine proposes one; choosing it writes to local
+settings through `src/permissions/rules.ts`. Approved or rule-allowed calls still
+consume the normal hard execution budget before invocation.
+
+`src/tools/bash/shell-runner.ts` runs `/bin/sh -c` with a 120-second default
+timeout (maximum 600 seconds), a 256 KiB output cap per stream, AbortSignal
+cancellation, and process-group termination. A pre-aborted signal never starts
+a process. Bash runs with the user's normal filesystem/network permissions;
+there is no OS sandbox. All subagent types exclude Bash via
+`SUBAGENT_DISALLOWED_TOOLS` in `src/tools/subagent/types.ts`.
 
 ## Skills
 

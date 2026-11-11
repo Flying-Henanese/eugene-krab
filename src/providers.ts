@@ -56,7 +56,7 @@ export const PROVIDERS: ProviderDef[] = [
     displayName: 'Moonshot',
     modelPrefix: 'kimi-',
     apiKeyEnvVar: 'MOONSHOT_API_KEY',
-    fastModel: 'kimi-k2-5',
+    fastModel: 'kimi-k3',
     contextWindow: 131_072,
   },
   {
@@ -64,7 +64,7 @@ export const PROVIDERS: ProviderDef[] = [
     displayName: 'DeepSeek',
     modelPrefix: 'deepseek-',
     apiKeyEnvVar: 'DEEPSEEK_API_KEY',
-    fastModel: 'deepseek-v4-flash',
+    fastModel: 'deepseek-flash',
     contextWindow: 1_000_000,
   },
   {

@@ -298,9 +298,10 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
       },
     }),
   deepseek: (name, opts) => {
-    // Both deepseek-v4-pro and deepseek-v4-flash support thinking mode.
+    // Keep the older Flash ID compatible while supporting the upstream Flash alias.
     // temperature/top_p/presence_penalty/frequency_penalty are ignored in thinking mode.
-    const isThinkingModel = name === 'deepseek-v4-pro' || name === 'deepseek-v4-flash';
+    const isThinkingModel =
+      name === 'deepseek-v4-pro' || name === 'deepseek-flash' || name === 'deepseek-v4-flash';
     const { reasoningEffort, ...chatOpts } = opts;
     return new ChatOpenAI({
       model: name,
@@ -310,10 +311,9 @@ const MODEL_FACTORIES: Record<string, ModelFactory> = {
         baseURL: 'https://api.deepseek.com',
       },
       ...(isThinkingModel && {
-        // reasoning_effort is a top-level param; thinking toggle goes in extra_body
-        // per DeepSeek V4 API docs (OpenAI SDK compat layer)
-        reasoning_effort: resolveDeepSeekReasoningEffort(reasoningEffort),
-        extraBody: {
+        // LangChain forwards provider-specific request fields through modelKwargs.
+        modelKwargs: {
+          reasoning_effort: resolveDeepSeekReasoningEffort(reasoningEffort),
           thinking: { type: 'enabled' },
         },
       }),

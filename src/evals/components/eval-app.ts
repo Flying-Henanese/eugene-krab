@@ -12,11 +12,13 @@ interface EvalState {
   total: number;
   completed: number;
   correct: number;
+  pending: number;
   currentQuestion: string | null;
   results: EvalResult[];
   startTime: number;
   experimentName: string | null;
   datasetName: string | null;
+  reviewPath: string | null;
 }
 
 export interface EvalProgressEvent {
@@ -24,9 +26,11 @@ export interface EvalProgressEvent {
   total?: number;
   datasetName?: string;
   question?: string;
-  score?: number;
+  score?: number | null;
+  behaviorPass?: boolean;
   comment?: string;
   experimentName?: string;
+  reviewPath?: string;
   averageScore?: number;
 }
 
@@ -42,11 +46,13 @@ export class EvalApp extends Container {
     total: 0,
     completed: 0,
     correct: 0,
+    pending: 0,
     currentQuestion: null,
     results: [],
     startTime: Date.now(),
     experimentName: null,
     datasetName: null,
+    reviewPath: null,
   };
 
   constructor(tui: TUI, runEvaluation: () => AsyncGenerator<EvalProgressEvent, void, unknown>) {
@@ -76,27 +82,33 @@ export class EvalApp extends Container {
             currentQuestion: event.question ?? null,
           };
           break;
-        case 'question_end':
+        case 'question_end': {
+          const exactPass = event.score === 1 && event.behaviorPass !== false;
+          const pending = event.score === null;
           this.state = {
             ...this.state,
             completed: this.state.completed + 1,
-            correct: this.state.correct + (event.score === 1 ? 1 : 0),
+            correct: this.state.correct + (exactPass ? 1 : 0),
+            pending: this.state.pending + (pending ? 1 : 0),
             currentQuestion: null,
             results: [
               ...this.state.results,
               {
                 question: event.question ?? '',
-                score: event.score ?? 0,
+                score: event.score === undefined ? 0 : event.score,
                 comment: event.comment ?? '',
+                behaviorPass: event.behaviorPass ?? true,
               },
             ],
           };
           break;
+        }
         case 'complete':
           this.state = {
             ...this.state,
             status: 'complete',
             experimentName: event.experimentName ?? null,
+            reviewPath: event.reviewPath ?? null,
             currentQuestion: null,
           };
           break;
@@ -149,8 +161,9 @@ export class EvalApp extends Container {
       this.addChild(new Spacer(1));
       this.stats.setStats(
         this.state.correct,
-        this.state.completed - this.state.correct,
+        this.state.completed - this.state.correct - this.state.pending,
         this.state.startTime,
+        this.state.pending,
       );
       this.addChild(this.stats);
     }
@@ -164,11 +177,19 @@ export class EvalApp extends Container {
 
   private renderCompleteState() {
     this.currentQuestion.setQuestion(null);
-    this.stats.setStats(this.state.correct, this.state.completed - this.state.correct, null);
+    this.stats.setStats(
+      this.state.correct,
+      this.state.completed - this.state.correct - this.state.pending,
+      null,
+      this.state.pending,
+    );
 
+    const scoredResults = this.state.results.filter(
+      (result): result is EvalResult & { score: number } => result.score !== null,
+    );
     const avgScore =
-      this.state.results.length > 0
-        ? this.state.results.reduce((sum, result) => sum + result.score, 0) / this.state.results.length
+      scoredResults.length > 0
+        ? scoredResults.reduce((sum, result) => sum + result.score, 0) / scoredResults.length
         : 0;
 
     this.addChild(new Text('═'.repeat(70), 0, 0));
@@ -176,35 +197,55 @@ export class EvalApp extends Container {
     this.addChild(new Text('═'.repeat(70), 0, 0));
     this.addChild(new Text(`Experiment: ${this.state.experimentName ?? 'unknown'}`, 0, 0));
     this.addChild(new Text(`Examples evaluated: ${this.state.results.length}`, 0, 0));
-    this.addChild(
-      new Text(
-        `Average correctness score: ${theme.bold(theme.primary(`${(avgScore * 100).toFixed(1)}%`))}`,
-        0,
-        0,
-      ),
-    );
+    this.addChild(new Text(
+      scoredResults.length > 0
+        ? `Average correctness score: ${theme.bold(theme.primary(`${(avgScore * 100).toFixed(1)}%`))}`
+        : 'Average correctness score: pending manual review',
+      0,
+      0,
+    ));
+    if (this.state.reviewPath) {
+      this.addChild(new Text(`Manual review artifact: ${this.state.reviewPath}`, 0, 0));
+    }
     this.addChild(new Spacer(1));
     this.addChild(new Text('Results by question:', 0, 0));
     this.addChild(new Text('─'.repeat(70), 0, 0));
 
     for (const result of this.state.results) {
-      const icon = result.score === 1 ? '✓' : '✗';
-      const iconColor = result.score === 1 ? theme.success : theme.error;
+      const pending = result.score === null;
+      const exactPass = result.score === 1 && result.behaviorPass;
+      const icon = pending && result.behaviorPass ? '○' : exactPass ? '✓' : '✗';
+      const iconColor = pending && result.behaviorPass
+        ? theme.primary
+        : exactPass
+          ? theme.success
+          : theme.error;
+      const semanticLabel = result.score === null ? 'pending' : result.score.toFixed(2);
       this.addChild(
         new Text(
-          `${iconColor(icon)} ${theme.muted(`[${result.score}]`)} ${this.truncate(result.question, 65)}`,
+          `${iconColor(icon)} ${theme.muted(
+            `[semantic ${semanticLabel} | behavior ${result.behaviorPass ? 'pass' : 'fail'}]`,
+          )} ${this.truncate(result.question, 45)}`,
           0,
           0,
         ),
       );
-      if (result.comment && result.score !== 1) {
+      if (result.comment && !exactPass) {
         this.addChild(new Text(`    ${theme.muted(this.truncate(result.comment, 80))}`, 0, 0));
       }
     }
 
     this.addChild(new Spacer(1));
     this.addChild(new Text('─'.repeat(70), 0, 0));
-    this.addChild(new Text(theme.muted('View full results: https://smith.langchain.com'), 0, 0));
+    this.addChild(new Text(
+      theme.muted(
+        this.state.reviewPath
+          ? 'Semantic scores are pending manual review.'
+          : 'View full results: https://smith.langchain.com',
+      ),
+      0,
+      0,
+    ));
   }
 
   private truncate(value: string, maxLength: number): string {

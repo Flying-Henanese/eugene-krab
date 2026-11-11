@@ -29,9 +29,13 @@ const PROVIDER_MODELS: Record<string, Model[]> = {
     { id: 'grok-4-0709', displayName: 'Grok 4' },
     { id: 'grok-4-1-fast-reasoning', displayName: 'Grok 4.1 Fast Reasoning' },
   ],
-  moonshot: [{ id: 'kimi-k2-5', displayName: 'Kimi K2.5' }],
+  moonshot: [
+    { id: 'kimi-k3', displayName: 'Kimi K3' },
+    { id: 'kimi-k2-5', displayName: 'Kimi K2.5' },
+  ],
   deepseek: [
     { id: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro' },
+    { id: 'deepseek-flash', displayName: 'DeepSeek V4.1 Flash' },
     { id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash' },
   ],
   glm: [{ id: 'glm-5.3-flash', displayName: 'GLM 5.3 Flash' }],
